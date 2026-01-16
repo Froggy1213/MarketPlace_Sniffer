@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # --- База данных ---
+  db:
+    image: postgres:15-alpine
+    container_name: mercari_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- Наш Бот ---
+  app:
+    build: .
+    container_name: mercari_bot
+    # Монтируем папку с кодом
+    volumes:
+      - .:/app:z
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=db 
+      - POSTGRES_PORT=5432
+      - PYTHONUNBUFFERED=1  # Логи появляются сразу
+    depends_on:
+      db:
+        condition: service_healthy
+    
+    # Запускаем бота
+    command: python main.py
+    restart: always
+
+# --- ВОТ ЭТА ЧАСТЬ ПОТЕРЯЛАСЬ ---
+volumes:
+  postgres_data:
