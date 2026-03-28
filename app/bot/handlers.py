@@ -11,17 +11,10 @@ from app.bot.keyboards import get_platforms_keyboard, get_main_menu, get_price_k
 router = Router()
 
 
-def is_admin(user_id: int) -> bool:
-    """Check if the user has admin privileges."""
-    return user_id == settings.ADMIN_ID
-
-
 # --- START & MAIN MENU ---
 
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id): return
-
     # Clear state in case the bot was restarted mid-input
     await state.clear()
 
@@ -60,8 +53,6 @@ async def handle_help_button(message: Message):
 
 @router.message(Command("add"))
 async def cmd_add(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id): return
-
     # Step 1: Platform selection
     await message.answer(
         "Select a marketplace to search:",
@@ -181,7 +172,6 @@ async def finalize_task_creation(message: Message, state: FSMContext, max_price:
 
 @router.message(Command("list"))
 async def cmd_list(message: Message):
-    if not is_admin(message.from_user.id): return
     tasks = await get_user_tasks(message.from_user.id)
     if not tasks:
         await message.answer("📭 Your task list is empty.")

@@ -23,7 +23,9 @@ async def download_image(url: str) -> bytes | None:
     return None
 
 
-async def send_new_item_notification(item: ItemData):
+# Было: async def send_new_item_notification(item: ItemData):
+# Стало:
+async def send_new_item_notification(item: ItemData, user_id: int):
     """Sends a notification to the user with an image (if available)."""
 
     text = (
@@ -34,8 +36,6 @@ async def send_new_item_notification(item: ItemData):
     )
 
     try:
-        # Initialize the bot INSIDE the function using a context manager.
-        # Upon exiting the 'async with' block, the bot will automatically close its aiohttp session.
         async with Bot(token=settings.TELEGRAM_BOT_TOKEN.get_secret_value()) as bot:
             image_bytes = None
             if item.image_url:
@@ -44,26 +44,25 @@ async def send_new_item_notification(item: ItemData):
             if image_bytes:
                 photo = BufferedInputFile(image_bytes, filename=f"{item.market_id}.jpg")
                 await bot.send_photo(
-                    chat_id=settings.ADMIN_ID,
+                    chat_id=user_id,  # <--- Изменили здесь
                     photo=photo,
                     caption=text,
                     parse_mode="HTML"
                 )
             else:
                 await bot.send_message(
-                    chat_id=settings.ADMIN_ID,
+                    chat_id=user_id,  # <--- И здесь
                     text=text,
                     parse_mode="HTML",
                     disable_web_page_preview=False
                 )
 
-            logger.info(f"📨 Notification sent: {item.title[:20]}...")
+            logger.info(f"📨 Notification sent to user {user_id} for: {item.title[:20]}...")
 
     except Exception as e:
-        logger.error(f"❌ Telegram send error: {e}")
-        # Fallback in case of image attachment issues or other API errors
+        logger.error(f"❌ Telegram send error for user {user_id}: {e}")
         try:
             async with Bot(token=settings.TELEGRAM_BOT_TOKEN.get_secret_value()) as bot:
-                await bot.send_message(chat_id=settings.ADMIN_ID, text=text, parse_mode="HTML")
+                await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")  # <--- И здесь
         except Exception as fallback_error:
             logger.error(f"❌ Critical fallback error: {fallback_error}")

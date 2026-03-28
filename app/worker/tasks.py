@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from urllib.parse import quote
-from typing import List
+from typing import List, Dict, Set
 
 from app.worker.celery_app import celery_app
 from app.services.storage import get_all_active_tasks, save_new_items
@@ -72,49 +72,62 @@ def build_urls_from_task(task) -> List[str]:
     return urls
 
 
+
+
 async def async_run_all_searches():
     """
-    Core asynchronous logic for the background worker.
+    Core asynchronous logic with Multi-Tenant Routing (Query Batching).
     """
     logger.info("⏰ Celery Beat: Starting scheduled search cycle...")
 
-    # 1. Fetch all user intentions from the database
     tasks = await get_all_active_tasks()
     if not tasks:
         logger.info("📭 No active search tasks found in DB. Skipping cycle.")
         return
 
-    # 2. Build exactly which URLs to scrape
-    all_urls_to_parse = []
+    # 1. Map URLs to a set of User IDs to avoid duplicate browser launches
+    url_to_users: Dict[str, Set[int]] = {}
     for task in tasks:
-        all_urls_to_parse.extend(build_urls_from_task(task))
+        urls = build_urls_from_task(task)
+        for url in urls:
+            if url not in url_to_users:
+                url_to_users[url] = set()
+            url_to_users[url].add(task.user_id) # Связываем URL с пользователем
 
-    if not all_urls_to_parse:
+    urls_to_parse = list(url_to_users.keys())
+    if not urls_to_parse:
         return
 
-    # 3. Parse URLs using the anti-ban system
-    logger.info(f"🚦 Dispatching {len(all_urls_to_parse)} URLs to Playwright...")
-    results_dict = await parse_multiple_urls(all_urls_to_parse, max_items=10)
+    # 2. Parse URLs using the anti-ban system
+    logger.info(f"🚦 Dispatching {len(urls_to_parse)} unique URLs to Playwright...")
+    results_dict = await parse_multiple_urls(urls_to_parse, max_items=10)
 
-    # Flatten the dictionary into a single list of ItemData objects
+    # 3. Associate found items with their target users
     all_found_items = []
+    item_to_users: Dict[str, Set[int]] = {} # market_id -> set of user_ids
+
     for url, items in results_dict.items():
-        all_found_items.extend(items)
+        users_for_url = url_to_users[url]
+        for item in items:
+            all_found_items.append(item)
+            if item.market_id not in item_to_users:
+                item_to_users[item.market_id] = set()
+            item_to_users[item.market_id].update(users_for_url)
 
-    logger.info(f"🔎 Found {len(all_found_items)} total items. Filtering duplicates...")
-
-    # 4. Check against DB history to prevent spam
+    # 4. Filter duplicates via DB
     new_items = await save_new_items(all_found_items)
 
     if not new_items:
         logger.info("💤 No new items found this cycle.")
         return
 
-    # 5. Send notifications to Telegram
-    logger.info(f"🚀 {len(new_items)} NEW items found! Sending Telegram notifications.")
+    # 5. Route notifications to the correct users
+    logger.info(f"🚀 {len(new_items)} NEW items found! Routing notifications...")
     for item in new_items:
-        await send_new_item_notification(item)
-        await asyncio.sleep(1)  # Prevent Telegram API rate limit errors (429 Too Many Requests)
+        target_users = item_to_users.get(item.market_id, set())
+        for user_id in target_users:
+            await send_new_item_notification(item, user_id)
+            await asyncio.sleep(0.5)  # Throttling limits (max 30 msgs/sec per TG rules)
 
 
 @celery_app.task(name="app.worker.tasks.run_all_searches")

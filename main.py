@@ -1,42 +1,39 @@
 import asyncio
 import logging
-import sys
-from aiogram import Dispatcher
-from app.services.notification import bot
+from aiogram import Bot, Dispatcher
+from app.core.config import settings
 from app.bot.handlers import router
 
-# Setup structured logging
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
 
-async def main() -> None:
-    """
-    Application entry point.
-    Initializes and starts the Telegram bot polling.
-    """
+async def main():
     logger.info("🤖 Starting Telegram Bot...")
 
+    # Initialize Bot and Dispatcher directly in the main entry point
+    bot = Bot(token=settings.TELEGRAM_BOT_TOKEN.get_secret_value())
     dp = Dispatcher()
+
+    # Register the FSM and command handlers
     dp.include_router(router)
 
-    # Remove webhook to safely start polling
-    await bot.delete_webhook(drop_pending_updates=True)
-
     try:
-        # Start listening for Telegram updates
+        # Start long-polling
         await dp.start_polling(bot)
+    except Exception as e:
+        logger.error(f"❌ Bot crashed: {e}")
     finally:
+        # Graceful shutdown
         await bot.session.close()
-        logger.info("Bot session closed safely.")
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        logger.info("Bot stopped by system or user.")
+        logger.info("🛑 Bot stopped manually.")
