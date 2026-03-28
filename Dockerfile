@@ -1,13 +1,22 @@
 FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
 
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
+
 WORKDIR /app
 
-COPY  requirements.txt .
+ADD https://astral.sh/uv/install.sh /uv-installer.sh
+RUN sh /uv-installer.sh && rm /uv-installer.sh
+ENV PATH="/root/.local/bin/:$PATH"
 
-RUN pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml uv.lock ./
 
-RUN playwright install chromium
+RUN uv sync --frozen --no-dev
+
+RUN uv run playwright install chromium
 
 COPY . .
 
-CMD [ "python", 'main.py' ]
+CMD ["uv", "run", "python", "main.py"]

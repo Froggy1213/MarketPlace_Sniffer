@@ -1,7 +1,5 @@
-version: '3.8'
-
 services:
-  # --- База данных ---
+  # --- Database ---
   db:
     image: postgres:15-alpine
     container_name: mercari_db
@@ -20,27 +18,63 @@ services:
       timeout: 5s
       retries: 5
 
-  # --- Наш Бот ---
-  app:
+  # --- Message Broker ---
+  redis:
+    image: redis:7-alpine
+    container_name: mercari_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  # --- Telegram Bot (Core) ---
+  bot:
     build: .
     container_name: mercari_bot
-    # Монтируем папку с кодом
     volumes:
       - .:/app:z
     env_file:
       - .env
     environment:
-      - POSTGRES_HOST=db 
-      - POSTGRES_PORT=5432
-      - PYTHONUNBUFFERED=1  # Логи появляются сразу
+      - POSTGRES_HOST=db
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
-    
-    # Запускаем бота
     command: python main.py
     restart: always
 
-# --- ВОТ ЭТА ЧАСТЬ ПОТЕРЯЛАСЬ ---
+  # --- Background Worker (Playwright Scraper) ---
+  worker:
+    build: .
+    container_name: mercari_worker
+    volumes:
+      - .:/app:z
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+      db:
+        condition: service_healthy
+    # Start Celery worker with eventlet/gevent or solo pool for async compatibility
+    command: celery -A app.worker.celery_app worker --loglevel=info --pool=solo
+
+  # --- Task Scheduler  ---
+  beat:
+    build: .
+    container_name: mercari_beat
+    volumes:
+      - .:/app:z
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    command: celery -A app.worker.celery_app beat --loglevel=info
+
 volumes:
   postgres_data:
