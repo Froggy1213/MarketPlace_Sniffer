@@ -16,3 +16,6 @@ postgres_data/
 
 # Секреты (САМОЕ ВАЖНОЕ)
 .env
+
+# Celery
+celerybeat-schedule
