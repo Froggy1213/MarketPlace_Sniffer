@@ -32,6 +32,7 @@ services:
     container_name: mercari_bot
     volumes:
       - .:/app:z
+      - /app/.venv
     env_file:
       - .env
     environment:
@@ -40,7 +41,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: python main.py
+    command: uv run python main.py
     restart: always
 
   # --- Background Worker (Playwright Scraper) ---
@@ -49,17 +50,19 @@ services:
     container_name: mercari_worker
     volumes:
       - .:/app:z
+      - /app/.venv
     env_file:
       - .env
     environment:
       - POSTGRES_HOST=db
       - REDIS_URL=redis://redis:6379/0
     depends_on:
-      - redis
+      redis:
+        condition: service_started
       db:
         condition: service_healthy
     # Start Celery worker with eventlet/gevent or solo pool for async compatibility
-    command: celery -A app.worker.celery_app worker --loglevel=info --pool=solo
+    command: uv run celery -A app.worker.celery_app worker --loglevel=info --pool=solo
 
   # --- Task Scheduler  ---
   beat:
@@ -67,14 +70,18 @@ services:
     container_name: mercari_beat
     volumes:
       - .:/app:z
+      - /app/.venv
     env_file:
       - .env
     environment:
       - POSTGRES_HOST=db
       - REDIS_URL=redis://redis:6379/0
     depends_on:
-      - redis
-    command: celery -A app.worker.celery_app beat --loglevel=info
+      redis:
+        condition: service_started
+      db:
+        condition: service_healthy
+    command: uv run celery -A app.worker.celery_app beat --loglevel=info
 
 volumes:
   postgres_data:

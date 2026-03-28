@@ -5,7 +5,8 @@ from typing import List
 
 from app.worker.celery_app import celery_app
 from app.services.storage import get_all_active_tasks, save_new_items
-from app.services.parser_service import parse_multiple_urls
+from app.services.parsers.engine import parse_multiple_urls
+from app.services.parsers.base import ItemData
 from app.services.notification import send_new_item_notification
 
 logger = logging.getLogger(__name__)

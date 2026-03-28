@@ -1,65 +1,71 @@
 import logging
-from aiogram import Bot
-from aiogram.enums import ParseMode
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
+import aiohttp
+from aiogram.types import BufferedInputFile
+from app.services.parsers.base import ItemData
 from app.core.config import settings
-from app.services.parser_service import ItemData
+from aiogram import Bot
 
 logger = logging.getLogger(__name__)
 
-# Инициализируем бота один раз
-bot = Bot(token=settings.TELEGRAM_BOT_TOKEN.get_secret_value())
+# Initialize the bot
+bot = Bot(token=settings.BOT_TOKEN)
+
+
+async def download_image(url: str) -> bytes | None:
+    """Asynchronously downloads an image into memory before sending."""
+    if not url:
+        return None
+
+    try:
+        # Use aiohttp for fast file downloading
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as response:
+                if response.status == 200:
+                    return await response.read()
+    except Exception as e:
+        logger.debug(f"Failed to download image {url}: {e}")
+    return None
+
 
 async def send_new_item_notification(item: ItemData):
-    """
-    Отправляет уведомление о новом товаре в Telegram.
-    """
+    """Sends a notification to the user with an image (if available)."""
+
+    # Build the HTML message text
+    text = (
+        f"🌟 <b>New find!</b> [{item.platform.upper()}]\n\n"
+        f"🏷 <b>{item.title}</b>\n"
+        f"💰 <b>Price:</b> {item.price} ¥\n\n"
+        f"🔗 <a href='{item.url}'>View item</a>"
+    )
     try:
-        # 1. Готовим текст сообщения (HTML)
-        text = (
-            f"<b>🔥 NEW ITEM FOUND!</b>\n\n"
-            f"📦 <b>{item.title}</b>\n"
-            f"💰 Price: <b>¥{item.price:,}</b>\n"
-            f"🏪 Platform: #{item.platform}\n"
-        )
-
-        # 2. Готовим кнопку-ссылку
-        # Важно: используем именованные аргументы (text=..., url=...)
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔗 Купить сейчас", url=item.url)]
-        ])
-
-        # 3. Отправляем
+        image_bytes = None
         if item.image_url:
-            try:
-                # ПРОСТОЕ РЕШЕНИЕ: Передаем ссылку строкой
-                await bot.send_photo(
-                    chat_id=settings.ADMIN_ID,
-                    photo=item.image_url, 
-                    caption=text,
-                    parse_mode=ParseMode.HTML,
-                    reply_markup=keyboard
-                )
-            except Exception as img_err:
-                # Если картинка битая или недоступна, шлем просто текст
-                logger.warning(f"Не удалось отправить фото ({img_err}), шлю текст.")
-                await bot.send_message(
-                    chat_id=settings.ADMIN_ID,
-                    text=text,
-                    parse_mode=ParseMode.HTML,
-                    reply_markup=keyboard
-                )
+            # Download the image to our server
+            image_bytes = await download_image(item.image_url)
+        if image_bytes:
+            # Send the photo as an in-memory file
+            photo = BufferedInputFile(image_bytes, filename=f"{item.market_id}.jpg")
+            await bot.send_photo(
+                chat_id=settings.ADMIN_ID,
+                photo=photo,
+                caption=text,
+                parse_mode="HTML"
+            )
         else:
-            # Если картинки нет изначально
+            # Fallback: if there's no image or it failed to download, send text only
             await bot.send_message(
                 chat_id=settings.ADMIN_ID,
                 text=text,
-                parse_mode=ParseMode.HTML,
-                reply_markup=keyboard
+                parse_mode="HTML",
+                disable_web_page_preview=False
             )
-            
-        logger.info(f"📨 Уведомление отправлено: {item.title[:20]}...")
+
+        logger.info(f"📨 Notification sent: {item.title[:20]}...")
 
     except Exception as e:
-        logger.error(f"❌ Ошибка отправки в Telegram: {e}")
+        logger.error(f"❌ Telegram send error: {e}")
+        # Hard fallback for unexpected API errors
+        try:
+            await bot.send_message(chat_id=settings.ADMIN_ID, text=text, parse_mode="HTML")
+        except:
+            pass

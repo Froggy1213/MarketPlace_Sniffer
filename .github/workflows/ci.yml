@@ -1,0 +1,36 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🛠 Install uv (Fast Python Package Manager)
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: 🐍 Set up Python 3.13
+        run: uv python install 3.13
+
+      - name: 📦 Install dependencies
+        run: uv sync --frozen
+
+      - name: 🧹 Run Ruff (Linter & Formatter check)
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: 🛡️ Run Mypy (Static Type Checker)
+        run: uv run mypy app/
