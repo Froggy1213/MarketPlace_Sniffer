@@ -2,29 +2,30 @@ import logging
 from typing import List, Optional
 from sqlalchemy import select, delete
 from app.db.database import async_session_maker
-from app.db.models import Product, Search
+from app.db.models import Product, SearchTask
 from app.services.parser_service import ItemData
 
 logger = logging.getLogger(__name__)
 
-# --- РАБОТА С ТОВАРАМИ (То, что уже было) ---
+
+# --- PRODUCTS ---
 
 async def save_new_items(items: List[ItemData]) -> List[ItemData]:
-    """Сохраняет новые товары и возвращает их список"""
+    """Saves new products and returns only those that didn't exist in the DB yet"""
     if not items:
         return []
 
     async with async_session_maker() as session:
         market_ids = [item.market_id for item in items]
-        
-        # Проверяем дубли
+
+        # Check for duplicates
         query = select(Product.market_id).where(Product.market_id.in_(market_ids))
         result = await session.execute(query)
         existing_ids = set(row[0] for row in result.all())
-        
+
         new_items_data = []
         new_products_to_insert = []
-        
+
         for item in items:
             if item.market_id not in existing_ids:
                 new_items_data.append(item)
@@ -42,48 +43,78 @@ async def save_new_items(items: List[ItemData]) -> List[ItemData]:
             try:
                 session.add_all(new_products_to_insert)
                 await session.commit()
-                logger.info(f"💾 Сохранено новых товаров в БД: {len(new_products_to_insert)}")
+                logger.info(f"💾 New products saved to DB: {len(new_products_to_insert)}")
             except Exception as e:
-                logger.error(f"Ошибка сохранения товаров: {e}")
+                logger.error(f"Error saving products: {e}")
                 await session.rollback()
-        
+
         return new_items_data
 
-# --- РАБОТА С ПОИСКОМ (Новое) ---
 
-async def add_search_url(url: str, user_id: int) -> bool:
-    """Добавляет новую ссылку в базу"""
+# --- SEARCH TASKS ---
+
+async def add_search_task(
+        user_id: int,
+        keyword: str,
+        platforms: str,
+        min_price: Optional[int] = None,
+        max_price: Optional[int] = None
+) -> bool:
+    """Adds a new search task to the database"""
     async with async_session_maker() as session:
-        # Проверяем, есть ли уже такая ссылка
-        result = await session.execute(select(Search).where(Search.url == url))
+        # Duplicate guard: check if the user is already searching for the same thing
+        query = select(SearchTask).where(
+            SearchTask.user_id == user_id,
+            SearchTask.keyword == keyword,
+            SearchTask.platforms == platforms
+        )
+        result = await session.execute(query)
         if result.scalar_one_or_none():
-            return False # Уже есть
+            return False
 
         try:
-            new_search = Search(url=url, user_id=user_id)
-            session.add(new_search)
+            new_task = SearchTask(
+                user_id=user_id,
+                keyword=keyword,
+                platforms=platforms,
+                min_price=min_price,
+                max_price=max_price
+            )
+            session.add(new_task)
             await session.commit()
             return True
         except Exception as e:
-            logger.error(f"Ошибка добавления ссылки: {e}")
+            logger.error(f"Error adding task: {e}")
             await session.rollback()
             return False
 
-async def get_all_searches() -> List[Search]:
-    """Получает все активные поиски (для списка команд и для парсера)"""
+
+async def get_all_active_tasks() -> List[SearchTask]:
+    """For the worker: fetch all active tasks across all users"""
     async with async_session_maker() as session:
-        result = await session.execute(select(Search).where(Search.is_active == True))
+        result = await session.execute(select(SearchTask).where(SearchTask.is_active == True))
         return list(result.scalars().all())
 
-async def delete_search_by_id(search_id: int) -> bool:
-    """Удаляет поиск по ID"""
+
+async def get_user_tasks(user_id: int) -> List[SearchTask]:
+    """For the Telegram bot: show the task list for a specific user (/list)"""
+    async with async_session_maker() as session:
+        result = await session.execute(select(SearchTask).where(SearchTask.user_id == user_id))
+        return list(result.scalars().all())
+
+
+async def delete_search_task(task_id: int, user_id: int) -> bool:
+    """Deletes a task. Important: user_id is checked so users can't delete each other's searches"""
     async with async_session_maker() as session:
         try:
-            stmt = delete(Search).where(Search.id == search_id)
+            stmt = delete(SearchTask).where(
+                SearchTask.id == task_id,
+                SearchTask.user_id == user_id
+            )
             result = await session.execute(stmt)
             await session.commit()
             return result.rowcount > 0
         except Exception as e:
-            logger.error(f"Ошибка удаления ссылки: {e}")
+            logger.error(f"Error deleting task: {e}")
             await session.rollback()
             return False
