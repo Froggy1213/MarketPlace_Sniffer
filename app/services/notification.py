@@ -7,9 +7,6 @@ from aiogram import Bot
 
 logger = logging.getLogger(__name__)
 
-# Initialize the bot
-bot = Bot(token=settings.BOT_TOKEN)
-
 
 async def download_image(url: str) -> bytes | None:
     """Asynchronously downloads an image into memory before sending."""
@@ -17,7 +14,6 @@ async def download_image(url: str) -> bytes | None:
         return None
 
     try:
-        # Use aiohttp for fast file downloading
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=10) as response:
                 if response.status == 200:
@@ -30,42 +26,44 @@ async def download_image(url: str) -> bytes | None:
 async def send_new_item_notification(item: ItemData):
     """Sends a notification to the user with an image (if available)."""
 
-    # Build the HTML message text
     text = (
-        f"🌟 <b>New find!</b> [{item.platform.upper()}]\n\n"
+        f"🌟 <b>New Match!</b> [{item.platform.upper()}]\n\n"
         f"🏷 <b>{item.title}</b>\n"
         f"💰 <b>Price:</b> {item.price} ¥\n\n"
-        f"🔗 <a href='{item.url}'>View item</a>"
+        f"🔗 <a href='{item.url}'>View Item</a>"
     )
-    try:
-        image_bytes = None
-        if item.image_url:
-            # Download the image to our server
-            image_bytes = await download_image(item.image_url)
-        if image_bytes:
-            # Send the photo as an in-memory file
-            photo = BufferedInputFile(image_bytes, filename=f"{item.market_id}.jpg")
-            await bot.send_photo(
-                chat_id=settings.ADMIN_ID,
-                photo=photo,
-                caption=text,
-                parse_mode="HTML"
-            )
-        else:
-            # Fallback: if there's no image or it failed to download, send text only
-            await bot.send_message(
-                chat_id=settings.ADMIN_ID,
-                text=text,
-                parse_mode="HTML",
-                disable_web_page_preview=False
-            )
 
-        logger.info(f"📨 Notification sent: {item.title[:20]}...")
+    try:
+        # Initialize the bot INSIDE the function using a context manager.
+        # Upon exiting the 'async with' block, the bot will automatically close its aiohttp session.
+        async with Bot(token=settings.TELEGRAM_BOT_TOKEN.get_secret_value()) as bot:
+            image_bytes = None
+            if item.image_url:
+                image_bytes = await download_image(item.image_url)
+
+            if image_bytes:
+                photo = BufferedInputFile(image_bytes, filename=f"{item.market_id}.jpg")
+                await bot.send_photo(
+                    chat_id=settings.ADMIN_ID,
+                    photo=photo,
+                    caption=text,
+                    parse_mode="HTML"
+                )
+            else:
+                await bot.send_message(
+                    chat_id=settings.ADMIN_ID,
+                    text=text,
+                    parse_mode="HTML",
+                    disable_web_page_preview=False
+                )
+
+            logger.info(f"📨 Notification sent: {item.title[:20]}...")
 
     except Exception as e:
         logger.error(f"❌ Telegram send error: {e}")
-        # Hard fallback for unexpected API errors
+        # Fallback in case of image attachment issues or other API errors
         try:
-            await bot.send_message(chat_id=settings.ADMIN_ID, text=text, parse_mode="HTML")
-        except:
-            pass
+            async with Bot(token=settings.TELEGRAM_BOT_TOKEN.get_secret_value()) as bot:
+                await bot.send_message(chat_id=settings.ADMIN_ID, text=text, parse_mode="HTML")
+        except Exception as fallback_error:
+            logger.error(f"❌ Critical fallback error: {fallback_error}")

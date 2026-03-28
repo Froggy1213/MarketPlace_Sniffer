@@ -5,6 +5,9 @@ from typing import List, Dict, Type
 from playwright.async_api import async_playwright
 
 from .base import BaseParser, Platform, ItemData
+from .rakuma import RakumaParser
+from .rakuten import RakutenParser
+from .paypay import PayPayParser
 from .mercari import MercariParser
 from .yahoo import YahooParser
 
@@ -16,14 +19,23 @@ class ParserFactory:
     _PARSERS: Dict[Platform, Type[BaseParser]] = {
         Platform.MERCARI: MercariParser,
         Platform.YAHOO: YahooParser,
+        Platform.RAKUMA: RakumaParser,
+        Platform.RAKUTEN: RakutenParser,
+        Platform.PAYPAY: PayPayParser,
     }
 
     @classmethod
     def get_parser(cls, url: str) -> BaseParser:
         if "mercari.com" in url:
             return cls._PARSERS[Platform.MERCARI]()
+        elif "paypayfleamarket" in url:
+            return cls._PARSERS[Platform.PAYPAY]()
         elif "yahoo.co.jp" in url:
             return cls._PARSERS[Platform.YAHOO]()
+        elif "fril.jp" in url:
+            return cls._PARSERS[Platform.RAKUMA]()
+        elif "rakuten.co.jp" in url:
+            return cls._PARSERS[Platform.RAKUTEN]()
         raise ValueError(f"No parser plugin found for URL: {url}")
 
 

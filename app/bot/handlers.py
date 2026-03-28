@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from app.services.storage import add_search_task, get_user_tasks, delete_search_task
 from app.core.config import settings
 from app.bot.states import AddSearchForm
-from app.bot.keyboards import get_platforms_keyboard
+from app.bot.keyboards import get_platforms_keyboard, get_main_menu, get_price_keyboard, get_delete_task_keyboard
 
 router = Router()
 
@@ -16,19 +16,42 @@ def is_admin(user_id: int) -> bool:
     return user_id == settings.ADMIN_ID
 
 
+# --- START & MAIN MENU ---
+
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id): return
 
-    # Clear state in case user restarted the bot during an active FSM flow
+    # Clear state in case the bot was restarted mid-input
     await state.clear()
 
     await message.answer(
-        "👋 <b>Welcome, Hunter!</b>\n\n"
-        "Commands:\n"
-        "➕ /add — Create a new search task\n"
-        "📋 /list — View active tasks\n"
-        "🗑 /del ID — Delete a task",
+        "👋 <b>Welcome to MarketPlace Sniffer!</b>\n\n"
+        "I will continuously search for new items across Japan's top marketplaces.\n"
+        "Use the menu below to get started:",
+        parse_mode="HTML",
+        reply_markup=get_main_menu()
+    )
+
+
+# Handle bottom menu button presses
+@router.message(F.text == "➕ New search")
+async def handle_new_search_button(message: Message, state: FSMContext):
+    await cmd_add(message, state)
+
+
+@router.message(F.text == "📋 My tasks")
+async def handle_my_tasks_button(message: Message):
+    await cmd_list(message)
+
+
+@router.message(F.text == "ℹ️ Help")
+async def handle_help_button(message: Message):
+    await message.answer(
+        "<b>Available commands:</b>\n"
+        "<code>/add</code> — Create a new task\n"
+        "<code>/list</code> — List active tasks\n"
+        "<code>/del ID</code> — Delete a task by its ID",
         parse_mode="HTML"
     )
 
@@ -39,9 +62,9 @@ async def cmd_start(message: Message, state: FSMContext):
 async def cmd_add(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id): return
 
-    # Step 1: Ask for platform and set state
+    # Step 1: Platform selection
     await message.answer(
-        "Select the target marketplace:",
+        "Select a marketplace to search:",
         reply_markup=get_platforms_keyboard()
     )
     await state.set_state(AddSearchForm.waiting_for_platform)
@@ -49,17 +72,14 @@ async def cmd_add(message: Message, state: FSMContext):
 
 @router.callback_query(AddSearchForm.waiting_for_platform, F.data.startswith("platform_"))
 async def process_platform_selection(callback: CallbackQuery, state: FSMContext):
-    # Extract platforms from callback data (e.g., "platform_mercari,yahoo" -> "mercari,yahoo")
     selected_platform = callback.data.replace("platform_", "")
-
-    # Store the choice in FSM memory
     await state.update_data(platforms=selected_platform)
 
-    # Remove inline keyboard from the previous message
+    # Remove the inline keyboard after selection
     await callback.message.edit_reply_markup(reply_markup=None)
 
-    # Step 2: Ask for keyword
-    await callback.message.answer("Enter the keyword (e.g., ThinkPad X1 Carbon):")
+    # Step 2: Keyword input
+    await callback.message.answer("Enter a keyword (e.g. <i>ThinkPad X1 Carbon</i>):", parse_mode="HTML")
     await state.set_state(AddSearchForm.waiting_for_keyword)
     await callback.answer()
 
@@ -68,58 +88,93 @@ async def process_platform_selection(callback: CallbackQuery, state: FSMContext)
 async def process_keyword(message: Message, state: FSMContext):
     await state.update_data(keyword=message.text.strip())
 
-    # Step 3: Ask for min price
+    # Step 3: Minimum price with presets
     await message.answer(
-        "Enter the MINIMUM price in JPY (digits only).\n"
-        "Or type '0' to skip."
+        "Set the <b>MINIMUM</b> price in yen:\n"
+        "<i>(Pick from the list or type a number)</i>",
+        parse_mode="HTML",
+        reply_markup=get_price_keyboard("min")
     )
     await state.set_state(AddSearchForm.waiting_for_min_price)
 
 
+# Handle minimum price (button press)
+@router.callback_query(AddSearchForm.waiting_for_min_price, F.data.startswith("price_"))
+async def process_min_price_callback(callback: CallbackQuery, state: FSMContext):
+    price = int(callback.data.replace("price_", ""))
+    await state.update_data(min_price=price if price > 0 else None)
+
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await ask_max_price(callback.message, state)
+    await callback.answer()
+
+
+# Handle minimum price (manual text input)
 @router.message(AddSearchForm.waiting_for_min_price)
-async def process_min_price(message: Message, state: FSMContext):
+async def process_min_price_text(message: Message, state: FSMContext):
     if not message.text.isdigit():
         await message.answer("⚠️ Please enter numbers only. Try again:")
         return
 
-    min_price = int(message.text)
-    await state.update_data(min_price=min_price if min_price > 0 else None)
+    price = int(message.text)
+    await state.update_data(min_price=price if price > 0 else None)
+    await ask_max_price(message, state)
 
-    # Step 4: Ask for max price
-    await message.answer(
-        "Enter the MAXIMUM price in JPY (digits only).\n"
-        "Or type '0' to skip."
+
+async def ask_max_price(message_or_callback: Message, state: FSMContext):
+    """Helper to transition to the maximum price step"""
+    await message_or_callback.answer(
+        "Set the <b>MAXIMUM</b> price in yen:\n"
+        "<i>(Pick from the list or type a number)</i>",
+        parse_mode="HTML",
+        reply_markup=get_price_keyboard("max")
     )
     await state.set_state(AddSearchForm.waiting_for_max_price)
 
 
+# Handle maximum price (button press)
+@router.callback_query(AddSearchForm.waiting_for_max_price, F.data.startswith("price_"))
+async def process_max_price_callback(callback: CallbackQuery, state: FSMContext):
+    price = int(callback.data.replace("price_", ""))
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await finalize_task_creation(callback.message, state, price)
+    await callback.answer()
+
+
+# Handle maximum price (manual text input)
 @router.message(AddSearchForm.waiting_for_max_price)
-async def process_max_price(message: Message, state: FSMContext):
+async def process_max_price_text(message: Message, state: FSMContext):
     if not message.text.isdigit():
         await message.answer("⚠️ Please enter numbers only. Try again:")
         return
+    price = int(message.text)
+    await finalize_task_creation(message, state, price)
 
-    max_price = int(message.text)
 
-    # Retrieve all collected data from FSM memory
+async def finalize_task_creation(message: Message, state: FSMContext, max_price: int):
+    """Save the task to the database"""
     data = await state.get_data()
 
-    # Save the new task to PostgreSQL
     success = await add_search_task(
-        user_id=message.from_user.id,
+        user_id=message.chat.id,
         keyword=data['keyword'],
         platforms=data['platforms'],
         min_price=data.get('min_price'),
         max_price=max_price if max_price > 0 else None
     )
 
-    # Clear FSM state
     await state.clear()
 
     if success:
-        await message.answer(f"✅ <b>Task created!</b>\nTarget: {data['keyword']}", parse_mode="HTML")
+        platforms_display = data['platforms'].replace(',', ', ')
+        await message.answer(
+            f"✅ <b>Task created successfully!</b>\n\n"
+            f"🎯 <b>Keyword:</b> {data['keyword']}\n"
+            f"🛒 <b>Markets:</b> {platforms_display.upper()}",
+            parse_mode="HTML"
+        )
     else:
-        await message.answer("⚠️ This search task already exists in your list.")
+        await message.answer("⚠️ This task already exists in your list.")
 
 
 # --- OTHER COMMANDS ---
@@ -127,36 +182,33 @@ async def process_max_price(message: Message, state: FSMContext):
 @router.message(Command("list"))
 async def cmd_list(message: Message):
     if not is_admin(message.from_user.id): return
-
-    # Fetch tasks specific to this user
     tasks = await get_user_tasks(message.from_user.id)
     if not tasks:
         await message.answer("📭 Your task list is empty.")
         return
-
-    text = "<b>📋 Active Tasks:</b>\n\n"
+    await message.answer("<b>📋 Your active tasks:</b>", parse_mode="HTML")
+    # Send each task as a separate message with a delete button
     for t in tasks:
         prices = f" (¥{t.min_price or 0} - ¥{t.max_price or '∞'})" if t.min_price or t.max_price else ""
-        text += f"🔹 <b>ID: {t.id}</b> | {t.keyword}{prices} [{t.platforms}]\n"
+        text = f"🔹 <b>{t.keyword}</b>{prices}\n🛒 Markets: {t.platforms}"
+        await message.answer(
+            text,
+            parse_mode="HTML",
+            reply_markup=get_delete_task_keyboard(t.id)
+        )
 
-    text += "\nTo delete a task, use: <code>/del ID</code>"
-    await message.answer(text, parse_mode="HTML")
 
-
-@router.message(Command("del"))
-async def cmd_del(message: Message):
-    if not is_admin(message.from_user.id): return
-
-    parts = message.text.split()
-    if len(parts) < 2 or not parts[1].isdigit():
-        await message.answer("⚠️ Format: <code>/del ID</code>", parse_mode="HTML")
-        return
-
-    task_id = int(parts[1])
-    # Ensure the user can only delete their own tasks
-    success = await delete_search_task(task_id, message.from_user.id)
-
+@router.callback_query(F.data.startswith("delete_task_"))
+async def process_delete_task(callback: CallbackQuery):
+    task_id = int(callback.data.replace("delete_task_", ""))
+    success = await delete_search_task(task_id, callback.from_user.id)
     if success:
-        await message.answer(f"🗑 Task <b>ID {task_id}</b> has been deleted.", parse_mode="HTML")
+        # On success, strike through the message text and remove the button
+        await callback.message.edit_text(
+            f"<s>{callback.message.html_text}</s>\n\n🗑 <b>Deleted</b>",
+            parse_mode="HTML",
+            reply_markup=None
+        )
     else:
-        await message.answer("❌ Task not found or access denied.")
+        await callback.answer("❌ Error: task not found.", show_alert=True)
+    await callback.answer()

@@ -40,7 +40,35 @@ def build_urls_from_task(task) -> List[str]:
             url += f"&aucmaxprice={task.max_price}"
         urls.append(url)
 
-    # Later, you can easily add Rakuma, Rakuten, etc., here.
+    if "rakuma" in platforms:
+        # У Rakuma домен fril.jp, параметры передаются через ?min= & max=
+        url = f"https://fril.jp/search/{safe_keyword}"
+        params = []
+        if task.min_price:
+            params.append(f"min={task.min_price}")
+        if task.max_price:
+            params.append(f"max={task.max_price}")
+
+        if params:
+            url += "?" + "&".join(params)
+        urls.append(url)
+
+    if "rakuten" in platforms:
+        url = f"https://search.rakuten.co.jp/search/mall/{safe_keyword}/"
+        params = []
+        if task.min_price: params.append(f"min={task.min_price}")
+        if task.max_price: params.append(f"max={task.max_price}")
+        if params: url += "?" + "&".join(params)
+        urls.append(url)
+
+    if "paypay" in platforms:
+        url = f"https://paypayfleamarket.yahoo.co.jp/search/{safe_keyword}"
+        params = []
+        if task.min_price: params.append(f"minPrice={task.min_price}")
+        if task.max_price: params.append(f"maxPrice={task.max_price}")
+        if params: url += "?" + "&".join(params)
+        urls.append(url)
+
     return urls
 
 
