@@ -3,8 +3,7 @@ from typing import List, Optional
 from sqlalchemy import select, delete
 from app.db.database import async_session_maker
 from app.db.models import Product, SearchTask
-from app.services.parser_service import ItemData
-
+from app.services.parsers.base import ItemData
 logger = logging.getLogger(__name__)
 
 
