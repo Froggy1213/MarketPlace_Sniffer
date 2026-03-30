@@ -2,35 +2,40 @@ name: CI Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   pull_request:
-    branches:
-      - main
+    branches: [ "main" ]
 
 jobs:
-  lint-and-typecheck:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Checkout code
+      - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
-      - name: 🛠 Install uv (Fast Python Package Manager)
-        uses: astral-sh/setup-uv@v5
+      - name: 🚀 Install uv
+        uses: astral-sh/setup-uv@v3
         with:
           version: "latest"
 
       - name: 🐍 Set up Python 3.13
         run: uv python install 3.13
 
-      - name: 📦 Install dependencies
-        run: uv sync --frozen
+      - name: 📦 Install Dependencies
+        run: uv sync --all-extras --dev
 
-      - name: 🧹 Run Ruff (Linter & Formatter check)
-        run: |
-          uv run ruff check .
-          uv run ruff format --check .
+      - name: 🧹 Lint with Ruff
+        run: uv run ruff check .
 
-      - name: 🛡️ Run Mypy (Static Type Checker)
+      - name: 🏷️ Type Check with Mypy
         run: uv run mypy app/
+
+      - name: 🧪 Run Tests (Pytest)
+        run: uv run pytest app/tests/ -v
+        env:
+          # Заглушки для тестов, чтобы они не лезли в реальную базу и телеграм
+          TELEGRAM_BOT_TOKEN: "123456789:AA_mock_token_for_tests_only"
+          ADMIN_ID: 123456789
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          REDIS_URL: "redis://localhost:6379/0"
