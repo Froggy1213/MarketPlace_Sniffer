@@ -1,6 +1,6 @@
 import os
-from celery import Celery
-from celery.schedules import crontab
+from celery import Celery # type: ignore
+from celery.schedules import crontab # type: ignore
 
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 

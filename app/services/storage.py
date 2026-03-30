@@ -112,7 +112,7 @@ async def delete_search_task(task_id: int, user_id: int) -> bool:
             )
             result = await session.execute(stmt)
             await session.commit()
-            return result.rowcount > 0
+            return result.rowcount > 0 # type: ignore
         except Exception as e:
             logger.error(f"Error deleting task: {e}")
             await session.rollback()

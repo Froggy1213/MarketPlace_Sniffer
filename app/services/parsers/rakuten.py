@@ -19,7 +19,7 @@ class RakutenParser(BaseParser):
 
             # Ищем карточки товаров. У Rakuten они обычно в классе .searchresultitem
             item_elements = await page.locator('.searchresultitem, div[class*="searchresult"]').all()
-            results = []
+            results: list[ItemData] = []
 
             for item in item_elements:
                 if len(results) >= max_items:

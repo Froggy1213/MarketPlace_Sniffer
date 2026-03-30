@@ -15,7 +15,7 @@ async def download_image(url: str) -> bytes | None:
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=10) as response:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 if response.status == 200:
                     return await response.read()
     except Exception as e:

@@ -30,7 +30,7 @@ class MercariParser(BaseParser):
                 logger.warning("Mercari: Grid not found, attempting direct link extraction.")
 
             item_elements = await page.locator(MercariSelectors.ITEM_LINK).all()
-            results = []
+            results: list[ItemData] = []
 
             for item in item_elements:
                 if len(results) >= max_items:

@@ -19,7 +19,7 @@ class PayPayParser(BaseParser):
 
             # PayPay (Yahoo Flea Market) имеет ссылки вида /item/
             item_elements = await page.locator('a[href*="/item/"]').all()
-            results = []
+            results: list[ItemData] = []
             for item in item_elements:
                 if len(results) >= max_items:
                     break

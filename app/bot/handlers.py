@@ -15,6 +15,11 @@ router = Router()
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
     # Clear state in case the bot was restarted mid-input
+
+    if not message.text:
+        await message.answer("Please send a text value.")
+        return
+
     await state.clear()
 
     await message.answer(
@@ -29,16 +34,28 @@ async def cmd_start(message: Message, state: FSMContext):
 # Handle bottom menu button presses
 @router.message(F.text == "➕ New search")
 async def handle_new_search_button(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Please send a text value.")
+        return
+
     await cmd_add(message, state)
 
 
 @router.message(F.text == "📋 My tasks")
 async def handle_my_tasks_button(message: Message):
+    if not message.text:
+        await message.answer("Please send a text value.")
+        return
+
     await cmd_list(message)
 
 
 @router.message(F.text == "ℹ️ Help")
 async def handle_help_button(message: Message):
+    if not message.text:
+        await message.answer("Please send a text value.")
+        return
+
     await message.answer(
         "<b>Available commands:</b>\n"
         "<code>/add</code> — Create a new task\n"
@@ -52,6 +69,9 @@ async def handle_help_button(message: Message):
 
 @router.message(Command("add"))
 async def cmd_add(message: Message, state: FSMContext):
+    if not message.from_user:
+        return
+
     # Step 1: Platform selection
     await message.answer(
         "Select a marketplace to search:",
@@ -62,6 +82,9 @@ async def cmd_add(message: Message, state: FSMContext):
 
 @router.callback_query(AddSearchForm.waiting_for_platform, F.data.startswith("platform_"))
 async def process_platform_selection(callback: CallbackQuery, state: FSMContext):
+    if not callback.data or not isinstance(callback.message, Message):
+        return
+
     selected_platform = callback.data.replace("platform_", "")
     await state.update_data(platforms=selected_platform)
 
@@ -76,6 +99,10 @@ async def process_platform_selection(callback: CallbackQuery, state: FSMContext)
 
 @router.message(AddSearchForm.waiting_for_keyword)
 async def process_keyword(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Please send a text value.")
+        return
+
     await state.update_data(keyword=message.text.strip())
 
     # Step 3: Minimum price with presets
@@ -91,6 +118,9 @@ async def process_keyword(message: Message, state: FSMContext):
 # Handle minimum price (button press)
 @router.callback_query(AddSearchForm.waiting_for_min_price, F.data.startswith("price_"))
 async def process_min_price_callback(callback: CallbackQuery, state: FSMContext):
+    if not callback.data or not isinstance(callback.message, Message):
+        return
+
     price = int(callback.data.replace("price_", ""))
     await state.update_data(min_price=price if price > 0 else None)
 
@@ -102,6 +132,10 @@ async def process_min_price_callback(callback: CallbackQuery, state: FSMContext)
 # Handle minimum price (manual text input)
 @router.message(AddSearchForm.waiting_for_min_price)
 async def process_min_price_text(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Please send a text value.")
+        return
+
     if not message.text.isdigit():
         await message.answer("⚠️ Please enter numbers only. Try again:")
         return
@@ -125,6 +159,9 @@ async def ask_max_price(message_or_callback: Message, state: FSMContext):
 # Handle maximum price (button press)
 @router.callback_query(AddSearchForm.waiting_for_max_price, F.data.startswith("price_"))
 async def process_max_price_callback(callback: CallbackQuery, state: FSMContext):
+    if not callback.data or not isinstance(callback.message, Message):
+        return
+
     price = int(callback.data.replace("price_", ""))
     await callback.message.edit_reply_markup(reply_markup=None)
     await finalize_task_creation(callback.message, state, price)
@@ -134,6 +171,10 @@ async def process_max_price_callback(callback: CallbackQuery, state: FSMContext)
 # Handle maximum price (manual text input)
 @router.message(AddSearchForm.waiting_for_max_price)
 async def process_max_price_text(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Please send a text value.")
+        return
+
     if not message.text.isdigit():
         await message.answer("⚠️ Please enter numbers only. Try again:")
         return
@@ -171,6 +212,13 @@ async def finalize_task_creation(message: Message, state: FSMContext, max_price:
 
 @router.message(Command("list"))
 async def cmd_list(message: Message):
+    if not message.text:
+        await message.answer("Please send a text value.")
+        return
+
+    if not message.from_user:
+        return
+
     tasks = await get_user_tasks(message.from_user.id)
     if not tasks:
         await message.answer("📭 Your task list is empty.")
@@ -189,6 +237,9 @@ async def cmd_list(message: Message):
 
 @router.callback_query(F.data.startswith("delete_task_"))
 async def process_delete_task(callback: CallbackQuery):
+    if not callback.data or not isinstance(callback.message, Message):
+        return
+
     task_id = int(callback.data.replace("delete_task_", ""))
     success = await delete_search_task(task_id, callback.from_user.id)
     if success:

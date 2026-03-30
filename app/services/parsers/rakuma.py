@@ -32,7 +32,7 @@ class RakumaParser(BaseParser):
                 return []
 
             item_elements = await page.locator(RakumaSelectors.CONTAINER).all()
-            results = []
+            results: list[ItemData] = []
 
             for item in item_elements:
                 if len(results) >= max_items:
