@@ -57,7 +57,8 @@ class RakumaParser(BaseParser):
             return None
 
         link = await link_el.get_attribute("href")
-        if not link: return None
+        if not link:
+            return None
 
         market_id = link.split("/")[-1]
 
@@ -73,7 +74,7 @@ class RakumaParser(BaseParser):
         # Если картинка не отдала alt-текст, берем текст со всей карточки
         text = await item.inner_text()
         if title == "No Title" or len(title) < 2:
-            lines = [l for l in text.split('\n') if '¥' not in l and len(l) > 2]
+            lines = [line for line in text.split('\n') if '¥' not in line and len(line) > 2]
             title = lines[0] if lines else "Rakuma Item"
 
         price_match = re.search(r'(?:¥|kb)\s*([0-9,]+)', text)

@@ -53,7 +53,8 @@ class BaseParser(ABC):
                 await asyncio.sleep(2 ** attempt)
 
     def _clean_price(self, text: str) -> int:
-        if not text: return 0
+        if not text:
+            return 0
         match = re.search(r'([0-9,]+)', text)
         if match:
             clean = match.group(1).replace(',', '')

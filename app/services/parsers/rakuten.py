@@ -1,6 +1,8 @@
-import logging, re, asyncio
+import logging
+import re
+import asyncio
 from typing import List, Optional
-from playwright.async_api import Page, Locator, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import Page, Locator
 from .base import BaseParser, ItemData, Platform
 
 logger = logging.getLogger(__name__)
@@ -20,10 +22,12 @@ class RakutenParser(BaseParser):
             results = []
 
             for item in item_elements:
-                if len(results) >= max_items: break
+                if len(results) >= max_items:
+                    break
                 try:
                     data = await self._extract_item(item)
-                    if data: results.append(data)
+                    if data:
+                        results.append(data)
                 except Exception as e:
                     logger.debug(f"Rakuten extraction skipped: {e}")
                     continue
@@ -34,9 +38,11 @@ class RakutenParser(BaseParser):
 
     async def _extract_item(self, item: Locator) -> Optional[ItemData]:
         link_el = item.locator('a').first
-        if await link_el.count() == 0: return None
+        if await link_el.count() == 0:
+            return None
         url = await link_el.get_attribute("href")
-        if not url: return None
+        if not url:
+            return None
 
         market_id = url.split("?")[0].strip("/")[-15:]  # Хэш или ID из ссылки
         title = await link_el.get_attribute("title") or await link_el.inner_text()
@@ -48,8 +54,9 @@ class RakutenParser(BaseParser):
         image_url = None
         try:
             img = item.locator('img').first
-            if await img.count() > 0: image_url = await img.get_attribute("src")
-        except:
+            if await img.count() > 0:
+                image_url = await img.get_attribute("src")
+        except Exception:
             pass
 
         return ItemData(

@@ -4,7 +4,6 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 from app.services.storage import add_search_task, get_user_tasks, delete_search_task
-from app.core.config import settings
 from app.bot.states import AddSearchForm
 from app.bot.keyboards import get_platforms_keyboard, get_main_menu, get_price_keyboard, get_delete_task_keyboard
 

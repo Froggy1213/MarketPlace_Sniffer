@@ -1,4 +1,6 @@
-import logging, re, asyncio
+import logging
+import re
+import asyncio
 from typing import List, Optional
 from playwright.async_api import Page, Locator
 from .base import BaseParser, ItemData, Platform
@@ -19,10 +21,12 @@ class PayPayParser(BaseParser):
             item_elements = await page.locator('a[href*="/item/"]').all()
             results = []
             for item in item_elements:
-                if len(results) >= max_items: break
+                if len(results) >= max_items:
+                    break
                 try:
                     data = await self._extract_item(item)
-                    if data: results.append(data)
+                    if data:
+                        results.append(data)
                 except Exception as e:
                     logger.debug(f"PayPay extraction skipped: {e}")
             return results
@@ -32,8 +36,10 @@ class PayPayParser(BaseParser):
 
     async def _extract_item(self, item: Locator) -> Optional[ItemData]:
         url = await item.get_attribute("href")
-        if not url: return None
-        if not url.startswith("http"): url = f"https://paypayfleamarket.yahoo.co.jp{url}"
+        if not url:
+            return None
+        if not url.startswith("http"):
+            url = f"https://paypayfleamarket.yahoo.co.jp{url}"
 
         market_id = url.split("/")[-1]
 
@@ -43,7 +49,7 @@ class PayPayParser(BaseParser):
             if await img.count() > 0:
                 title = await img.get_attribute("alt") or "PayPay Item"
                 image_url = await img.get_attribute("src")
-        except:
+        except Exception:
             pass
 
         text = await item.inner_text()

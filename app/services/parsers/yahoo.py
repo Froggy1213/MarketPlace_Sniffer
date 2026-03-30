@@ -52,7 +52,8 @@ class YahooParser(BaseParser):
 
     async def _extract_item(self, item: Locator) -> Optional[ItemData]:
         link_el = item.locator(YahooSelectors.LINK).first
-        if await link_el.count() == 0: return None
+        if await link_el.count() == 0:
+            return None
 
         url = await link_el.get_attribute("href")
         title = await link_el.get_attribute("data-auction-title") or await link_el.inner_text()

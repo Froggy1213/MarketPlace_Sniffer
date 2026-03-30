@@ -51,7 +51,8 @@ class MercariParser(BaseParser):
 
     async def _extract_item(self, item: Locator) -> Optional[ItemData]:
         link = await item.get_attribute("href")
-        if not link: return None
+        if not link:
+            return None
 
         full_url = f"https://jp.mercari.com{link}"
         market_id = link.split("/")[-1]
@@ -67,7 +68,7 @@ class MercariParser(BaseParser):
 
         text = await item.inner_text()
         if title == "No Title" or len(title) < 2:
-            lines = [l for l in text.split('\n') if '¥' not in l and len(l) > 3]
+            lines = [line for line in text.split('\n') if '¥' not in line and len(line) > 3]
             title = lines[0] if lines else "Mercari Item"
 
         price_match = re.search(r'(?:¥|kb)\s*([0-9,]+)', text)

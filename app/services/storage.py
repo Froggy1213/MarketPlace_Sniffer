@@ -91,14 +91,14 @@ async def add_search_task(
 async def get_all_active_tasks() -> List[SearchTask]:
     """For the worker: fetch all active tasks across all users"""
     async with async_session_maker() as session:
-        result = await session.execute(select(SearchTask).where(SearchTask.is_active == True))
+        result = await session.execute(select(SearchTask).where(SearchTask.is_active))
         return list(result.scalars().all())
 
 
 async def get_user_tasks(user_id: int) -> List[SearchTask]:
     """For the Telegram bot: show the task list for a specific user (/list)"""
     async with async_session_maker() as session:
-        result = await session.execute(select(SearchTask).where(SearchTask.user_id == user_id))
+        result = await session.execute(select(SearchTask).where(SearchTask.is_active.is_(True)))
         return list(result.scalars().all())
 
 

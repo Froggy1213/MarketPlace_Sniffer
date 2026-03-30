@@ -6,7 +6,6 @@ from typing import List, Dict, Set
 from app.worker.celery_app import celery_app
 from app.services.storage import get_all_active_tasks, save_new_items
 from app.services.parsers.engine import parse_multiple_urls
-from app.services.parsers.base import ItemData
 from app.services.notification import send_new_item_notification
 
 logger = logging.getLogger(__name__)
@@ -56,17 +55,23 @@ def build_urls_from_task(task) -> List[str]:
     if "rakuten" in platforms:
         url = f"https://search.rakuten.co.jp/search/mall/{safe_keyword}/"
         params = []
-        if task.min_price: params.append(f"min={task.min_price}")
-        if task.max_price: params.append(f"max={task.max_price}")
-        if params: url += "?" + "&".join(params)
+        if task.min_price:
+            params.append(f"min={task.min_price}")
+        if task.max_price:
+            params.append(f"max={task.max_price}")
+        if params:
+            url += "?" + "&".join(params)
         urls.append(url)
 
     if "paypay" in platforms:
         url = f"https://paypayfleamarket.yahoo.co.jp/search/{safe_keyword}"
         params = []
-        if task.min_price: params.append(f"minPrice={task.min_price}")
-        if task.max_price: params.append(f"maxPrice={task.max_price}")
-        if params: url += "?" + "&".join(params)
+        if task.min_price:
+            params.append(f"minPrice={task.min_price}")
+        if task.max_price:
+            params.append(f"maxPrice={task.max_price}")
+        if params:
+            url += "?" + "&".join(params)
         urls.append(url)
 
     return urls
