@@ -265,7 +265,7 @@ async def finalize_task_creation(message: Message, state: FSMContext, max_price:
     success = await add_search_task(
         user_id=message.chat.id,
         keyword=data['keyword'],
-        platforms=data['platforms'],
+        platforms=[p.strip() for p in data['platforms'].split(',')],
         min_price=data.get('min_price'),
         max_price=max_price if max_price > 0 else None
     )

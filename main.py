@@ -3,6 +3,8 @@ import logging
 from aiogram import Bot, Dispatcher
 from app.core.config import settings
 from app.bot.handlers import main_router
+from app.bot.middlewares.db import DatabaseMiddleware
+
 
 # Configure logging
 logging.basicConfig(
@@ -18,6 +20,8 @@ async def main():
     # Initialize Bot and Dispatcher directly in the main entry point
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN.get_secret_value())
     dp = Dispatcher()
+
+    dp.update.middleware(DatabaseMiddleware())
 
     # Register the FSM and command handlers
     dp.include_router(main_router)
