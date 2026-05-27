@@ -62,7 +62,7 @@ services:
       db:
         condition: service_healthy
     # Start Celery worker with eventlet/gevent or solo pool for async compatibility
-    command: uv run celery -A app.worker.celery_app worker --loglevel=info --pool=solo
+    command: uv run celery -A app.worker.celery_app worker --loglevel=info --concurrency=2
 
   # --- Task Scheduler  ---
   beat:

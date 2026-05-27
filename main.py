@@ -2,7 +2,7 @@ import asyncio
 import logging
 from aiogram import Bot, Dispatcher
 from app.core.config import settings
-from app.bot.handlers import router
+from app.bot.handlers import main_router
 
 # Configure logging
 logging.basicConfig(
@@ -20,7 +20,7 @@ async def main():
     dp = Dispatcher()
 
     # Register the FSM and command handlers
-    dp.include_router(router)
+    dp.include_router(main_router)
 
     try:
         # Start long-polling

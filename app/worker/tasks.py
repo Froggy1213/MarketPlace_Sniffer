@@ -2,6 +2,7 @@ import asyncio
 import logging
 from urllib.parse import quote
 from typing import List, Dict, Set
+from collections import defaultdict
 
 from app.worker.celery_app import celery_app
 from app.services.storage import get_all_active_tasks, save_new_items
@@ -11,77 +12,31 @@ from app.services.notification import send_new_item_notification
 logger = logging.getLogger(__name__)
 
 
-def build_urls_from_task(task) -> List[str]:
+def build_broad_url(platform: str, keyword: str) -> str:
     """
-    Generates target URLs based on task parameters and selected platforms.
-    This replaces the old hardcoded URLs with dynamic query building.
+    Генерирует ШИРОКИЙ URL только по ключевому слову (без цен).
+    Это позволяет 1 раз открыть страницу, даже если 100 юзеров ищут это слово с разными ценами.
     """
-    urls = []
-    # URL-encode the keyword (e.g., "Nintendo Switch" -> "Nintendo%20Switch")
-    safe_keyword = quote(task.keyword)
+    safe_keyword = quote(keyword.strip())
+    platform = platform.strip()
 
-    # Task platforms are stored as a comma-separated string: "mercari,yahoo"
-    platforms = task.platforms.split(",")
-
-    if "mercari" in platforms:
-        url = f"https://jp.mercari.com/search?keyword={safe_keyword}&status=on_sale"
-        if task.min_price:
-            url += f"&price_min={task.min_price}"
-        if task.max_price:
-            url += f"&price_max={task.max_price}"
-        urls.append(url)
-
-    if "yahoo" in platforms:
-        url = f"https://auctions.yahoo.co.jp/search/search?p={safe_keyword}"
-        if task.min_price:
-            url += f"&aucminprice={task.min_price}"
-        if task.max_price:
-            url += f"&aucmaxprice={task.max_price}"
-        urls.append(url)
-
-    if "rakuma" in platforms:
-        # У Rakuma домен fril.jp, параметры передаются через ?min= & max=
-        url = f"https://fril.jp/search/{safe_keyword}"
-        params = []
-        if task.min_price:
-            params.append(f"min={task.min_price}")
-        if task.max_price:
-            params.append(f"max={task.max_price}")
-
-        if params:
-            url += "?" + "&".join(params)
-        urls.append(url)
-
-    if "rakuten" in platforms:
-        url = f"https://search.rakuten.co.jp/search/mall/{safe_keyword}/"
-        params = []
-        if task.min_price:
-            params.append(f"min={task.min_price}")
-        if task.max_price:
-            params.append(f"max={task.max_price}")
-        if params:
-            url += "?" + "&".join(params)
-        urls.append(url)
-
-    if "paypay" in platforms:
-        url = f"https://paypayfleamarket.yahoo.co.jp/search/{safe_keyword}"
-        params = []
-        if task.min_price:
-            params.append(f"minPrice={task.min_price}")
-        if task.max_price:
-            params.append(f"maxPrice={task.max_price}")
-        if params:
-            url += "?" + "&".join(params)
-        urls.append(url)
-
-    return urls
-
-
+    if platform == "mercari":
+        return f"https://jp.mercari.com/search?keyword={safe_keyword}&status=on_sale"
+    elif platform == "yahoo":
+        return f"https://auctions.yahoo.co.jp/search/search?p={safe_keyword}"
+    elif platform == "rakuma":
+        return f"https://fril.jp/search/{safe_keyword}"
+    elif platform == "rakuten":
+        return f"https://search.rakuten.co.jp/search/mall/{safe_keyword}/"
+    elif platform == "paypay":
+        return f"https://paypayfleamarket.yahoo.co.jp/search/{safe_keyword}"
+    
+    return ""
 
 
 async def async_run_all_searches():
     """
-    Core asynchronous logic with Multi-Tenant Routing (Query Batching).
+    Core asynchronous logic with Multi-Tenant Routing & In-Memory Filtering.
     """
     logger.info("⏰ Celery Beat: Starting scheduled search cycle...")
 
@@ -90,40 +45,53 @@ async def async_run_all_searches():
         logger.info("📭 No active search tasks found in DB. Skipping cycle.")
         return
 
-    # 1. Map URLs to a set of User IDs to avoid duplicate browser launches
-    url_to_users: Dict[str, Set[int]] = {}
+    # 1. Группируем ЗАДАЧИ по широкому URL
+    url_to_tasks = defaultdict(list)
     for task in tasks:
-        urls = build_urls_from_task(task)
-        for url in urls:
-            if url not in url_to_users:
-                url_to_users[url] = set()
-            url_to_users[url].add(task.user_id) # Связываем URL с пользователем
+        platforms = task.platforms.split(",")
+        for p in platforms:
+            url = build_broad_url(p, task.keyword)
+            if url:
+                url_to_tasks[url].append(task)
 
-    urls_to_parse = list(url_to_users.keys())
+    urls_to_parse = list(url_to_tasks.keys())
     if not urls_to_parse:
         return
 
-    # 2. Parse URLs using the anti-ban system
-    logger.info(f"🚦 Dispatching {len(urls_to_parse)} unique URLs to Playwright...")
-    results_dict = await parse_multiple_urls(urls_to_parse, max_items=10)
+    # 2. Собираем топ-30 свежих товаров по каждому широкому запросу
+    logger.info(f"🚦 Dispatching {len(urls_to_parse)} BATCHED URLs to Playwright...")
+    # Берем больше товаров (30), так как мы игнорируем фильтры площадок
+    results_dict = await parse_multiple_urls(urls_to_parse, max_items=30)
 
-    # 3. Associate found items with their target users
-    all_found_items = []
-    item_to_users: Dict[str, Set[int]] = {} # market_id -> set of user_ids
+    all_valid_items = []
+    item_to_users: Dict[str, Set[int]] = defaultdict(set)
 
-    for url, items in results_dict.items():
-        users_for_url = url_to_users[url]
-        for item in items:
-            all_found_items.append(item)
-            if item.market_id not in item_to_users:
-                item_to_users[item.market_id] = set()
-            item_to_users[item.market_id].update(users_for_url)
+    # 3. In-Memory фильтрация (Магия SaaS)
+    for url, scraped_items in results_dict.items():
+        tasks_for_url = url_to_tasks[url]
+
+        for item in scraped_items:
+            for task in tasks_for_url:
+                # Применяем ценовые фильтры конкретного пользователя в RAM (мгновенно)
+                if task.min_price and item.price < task.min_price:
+                    continue
+                if task.max_price and item.price > task.max_price:
+                    continue
+
+                # Если товар прошел фильтры этого юзера, добавляем его в список рассылки
+                all_valid_items.append(item)
+                item_to_users[item.market_id].add(task.user_id)
+
+    # Если после фильтрации ничего не осталось
+    if not all_valid_items:
+        logger.info("💤 No items passed user price filters this cycle.")
+        return
 
     # 4. Filter duplicates via DB
-    new_items = await save_new_items(all_found_items)
+    new_items = await save_new_items(all_valid_items)
 
     if not new_items:
-        logger.info("💤 No new items found this cycle.")
+        logger.info("💤 All found items were already in the DB.")
         return
 
     # 5. Route notifications to the correct users
@@ -137,11 +105,6 @@ async def async_run_all_searches():
 
 @celery_app.task(name="app.worker.tasks.run_all_searches")
 def run_all_searches():
-    """
-    Synchronous wrapper for Celery to execute the async pipeline.
-    Because our tech stack (SQLAlchemy, Playwright, Aiogram) is async,
-    we must run the event loop manually inside the sync Celery worker.
-    """
     try:
         asyncio.run(async_run_all_searches())
     except Exception as e:
