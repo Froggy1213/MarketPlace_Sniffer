@@ -6,7 +6,7 @@ and user account upgrades to PRO tier.
 from aiogram import Router, F
 from aiogram.types import Message, LabeledPrice, PreCheckoutQuery
 
-from app.services.storage import upgrade_user_to_pro
+from app.services.users import upgrade_user_to_pro
 
 # Router for billing-related message and payment handlers
 billing_router = Router()

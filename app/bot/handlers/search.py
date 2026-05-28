@@ -8,10 +8,8 @@ from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
-from app.services.storage import (
-    add_search_task, get_user_tasks, delete_search_task, 
-    get_user_tier, count_user_tasks
-)
+from app.services.tasks import add_search_task, get_user_tasks, delete_search_task, count_user_tasks
+from app.services.users import get_user_tier
 from app.bot.states import AddSearchForm
 from app.bot.keyboards import get_platforms_keyboard, get_price_keyboard, get_delete_task_keyboard
 from app.bot.handlers.billing import send_pro_invoice

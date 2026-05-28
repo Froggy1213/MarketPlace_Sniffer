@@ -9,7 +9,7 @@ celery_app = Celery(
     "marketplace_sniffer",
     broker=redis_url,
     backend=redis_url,
-    include=["app.worker.tasks"] # We will create this file next
+    include=["app.worker.tasks"]
 )
 
 # Celery Configuration
@@ -19,17 +19,29 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="Asia/Tokyo",
     enable_utc=True,
+    
     # Prevent infinite task hanging
     task_soft_time_limit=300, # 5 minutes
     task_time_limit=360,      # 6 minutes
+
+    # =========================================================
+    # МИКРОСЕРВИСНАЯ МАРШРУТИЗАЦИЯ ОЧЕРЕДЕЙ
+    # =========================================================
+    task_default_queue="celery", # Дефолтная очередь (сюда падает парсинг)
+    task_routes={
+        # Все задачи на отправку сообщений жестко направляем в очередь 'notifications'
+        "app.worker.tasks.send_notification": {"queue": "notifications"}
+    }
 )
 
 # Configure Celery Beat (Task Scheduler)
-# This entirely replaces the old APScheduler from main.py
 celery_app.conf.beat_schedule = {
-    "run-sniffing-every-45-minutes": {
-        "task": "app.worker.tasks.run_all_searches",
-        # Execute every 45 minutes
-        "schedule": crontab(minute="*/45"),
+    "run-sniffing-frequently": {
+        # Имя задачи изменилось после рефакторинга
+        "task": "app.worker.tasks.parse_marketplaces",
+        
+        # Снайпер должен работать быстро. Запускаем каждые 3 минуты.
+        # Для PRO-юзеров потом можно будет сделать отдельную таску раз в 30 секунд.
+        "schedule": crontab(minute="*/3"),
     },
 }

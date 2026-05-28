@@ -1,9 +1,23 @@
-from sqlalchemy import String, Integer, DateTime, func, Boolean, BigInteger, ForeignKey
+from sqlalchemy import String, Integer, DateTime, func, Boolean, BigInteger, ForeignKey, Column, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, declarative_mixin, relationship
 from sqlalchemy.dialects.postgresql import ARRAY
 from app.db.database import Base
 from datetime import datetime
 from typing import Optional
+
+
+class FoundItem(Base, TimestampMixin):
+    __tablename__ = "found_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.telegram_id", ondelete="CASCADE"), index=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("search_tasks.id", ondelete="CASCADE"))
+    market_id: Mapped[str] = mapped_column(String) # ID товара на площадке
+
+    # Гарантируем, что один и тот же товар не отправится юзеру дважды
+    __table_args__ = (
+        UniqueConstraint('user_id', 'market_id', name='uq_user_market_id'),
+    )
 
 @declarative_mixin
 class TimestampMixin:

@@ -7,7 +7,7 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from app.services.storage import get_system_stats
+from app.services.admin import get_system_stats
 from app.core.config import settings
 
 # Router for admin-specific message handlers
