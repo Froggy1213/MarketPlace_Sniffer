@@ -2,7 +2,7 @@ import logging
 from typing import List, Optional
 from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.database import async_session_maker
+from app.db.database import worker_session_maker as async_session_maker
 from app.db.models import SearchTask
 
 logger = logging.getLogger(__name__)

@@ -1,16 +1,27 @@
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.pool import NullPool, QueuePool
 from sqlalchemy.orm import DeclarativeBase
 from app.core.config import settings
 
-engine = create_async_engine(
+# Движок для бота (с пулингом)
+bot_engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=False,
-    pool_size=10,         # Базовое количество соединений
-    max_overflow=20,      # Доп. соединения на случай пиковой нагрузки
-    pool_recycle=3600     # Рестарт соединений раз в час, чтобы не отваливались по таймауту
+    poolclass=QueuePool,
+    pool_size=10,
+    max_overflow=20,
+    echo=False
 )
 
-async_session_maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+# Движок для Celery (без пулинга, так как процессы короткоживущие)
+worker_engine = create_async_engine(
+    settings.DATABASE_URL,
+    poolclass=NullPool,
+    echo=False
+)
+
+# Фабрики сессий
+bot_session_maker = async_sessionmaker(bot_engine, expire_on_commit=False, class_=AsyncSession)
+worker_session_maker = async_sessionmaker(worker_engine, expire_on_commit=False, class_=AsyncSession)
 
 class Base(DeclarativeBase):
     pass

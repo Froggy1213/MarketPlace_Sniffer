@@ -1,11 +1,13 @@
 import asyncio
 import logging
 from urllib.parse import quote
-from typing import List, Dict, Set, Tuple
+from typing import Dict, Set, Tuple, List
 from collections import defaultdict
 
+from app.db.database import worker_engine as engine # Импортируем движок для воркера
 from app.worker.celery_app import celery_app
-from app.services.storage import get_all_active_tasks, save_new_items, check_and_mark_item_sent
+from app.services.tasks import get_all_active_tasks
+from app.services.items import save_new_items, check_and_mark_item_sent
 from app.services.parsers.engine import parse_multiple_urls
 from app.services.parsers.base import ItemData
 from app.services.notification import send_new_item_notification
@@ -114,23 +116,6 @@ def task_parse_marketplaces():
 # МИКРОСЕРВИС 2: НОТИФИКАТОР (Слушает очередь 'notifications')
 # ============================================================================
 
-async def async_send_notification(user_id: int, task_id: int, market_id: str, platform: str, title: str, price: int, url: str):
-    # 1. Защита от дублей. Атомарно проверяем и пишем в БД
-    is_new_for_user = await check_and_mark_item_sent(user_id, task_id, market_id)
-    if not is_new_for_user:
-        return  # Товар уже отправлялся этому пользователю
-
-    # 2. Восстанавливаем модель данных для отправки
-    item = ItemData(market_id=market_id, platform=platform, title=title, price=price, url=url)
-
-    # 3. Отправка в Telegram
-    try:
-        await send_new_item_notification(item, user_id)
-        logger.info(f"📨 [NOTIFIER] Sent {market_id} to user {user_id}")
-    except Exception as e:
-        logger.error(f"❌ Failed to send {market_id} to {user_id}: {e}")
-        # Если API Telegram отвалилось, можно сделать raise, чтобы Celery повторил попытку (Retry)
-
 
 @celery_app.task(name="app.worker.tasks.send_notification", rate_limit="20/m")
 def task_send_notification(**kwargs):
@@ -140,3 +125,29 @@ def task_send_notification(**kwargs):
     если прилетела пачка из 100 товаров. Бот не упадет от лимитов Telegram.
     """
     asyncio.run(async_send_notification(**kwargs))
+
+
+# ============================================================================
+# ВЫЗОВЫ CELERY ТАСОК (С очисткой пула соединений)
+# ============================================================================
+
+@celery_app.task(name="app.worker.tasks.parse_marketplaces")
+def task_parse_marketplaces():
+    async def wrapper():
+        try:
+            await async_parse_marketplaces()
+        finally:
+            # Важно: сбрасываем пул соединений, чтобы не было InterfaceError
+            await engine.dispose() 
+            
+    asyncio.run(wrapper())
+
+@celery_app.task(name="app.worker.tasks.send_notification", rate_limit="20/m")
+def task_send_notification(**kwargs):
+    async def wrapper():
+        try:
+            await async_send_notification(**kwargs)
+        finally:
+            await engine.dispose()
+            
+    asyncio.run(wrapper())

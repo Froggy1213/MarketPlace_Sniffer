@@ -1,7 +1,7 @@
 from typing import Callable, Dict, Any, Awaitable
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
-from app.db.database import async_session_maker
+from app.db.database import bot_session_maker as async_session_maker
 
 class DatabaseMiddleware(BaseMiddleware):
     async def __call__(

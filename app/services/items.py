@@ -2,7 +2,7 @@ import logging
 from typing import List
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from app.db.database import async_session_maker
+from app.db.database import worker_session_maker as async_session_maker
 from app.db.models import Product, FoundItem
 from app.services.parsers.base import ItemData
 

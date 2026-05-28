@@ -1,27 +1,16 @@
-from sqlalchemy import String, Integer, DateTime, func, Boolean, BigInteger, ForeignKey, Column, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, declarative_mixin, relationship
-from sqlalchemy.dialects.postgresql import ARRAY
-from app.db.database import Base
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import String, Integer, DateTime, Boolean, BigInteger, ForeignKey, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column, declarative_mixin, relationship
+from sqlalchemy.dialects.postgresql import ARRAY
 
-class FoundItem(Base, TimestampMixin):
-    __tablename__ = "found_items"
+from app.db.database import Base
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.telegram_id", ondelete="CASCADE"), index=True)
-    task_id: Mapped[int] = mapped_column(ForeignKey("search_tasks.id", ondelete="CASCADE"))
-    market_id: Mapped[str] = mapped_column(String) # ID товара на площадке
-
-    # Гарантируем, что один и тот же товар не отправится юзеру дважды
-    __table_args__ = (
-        UniqueConstraint('user_id', 'market_id', name='uq_user_market_id'),
-    )
 
 @declarative_mixin
 class TimestampMixin:
-    """Миксин для автоматического трекинга времени создания и обновления записей."""
+    """Миксин для трекинга времени создания и обновления записей."""
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
@@ -37,7 +26,7 @@ class User(Base, TimestampMixin):
     tier: Mapped[str] = mapped_column(String, default="free")  
     pro_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    # Двусторонняя связь для удобной выборки: user.tasks
+    # Связь с задачами
     tasks: Mapped[list["SearchTask"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
@@ -59,20 +48,32 @@ class SearchTask(Base, TimestampMixin):
     __tablename__ = "search_tasks"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    # Внешний ключ: при удалении юзера, его задачи удалятся каскадно
     user_id: Mapped[int] = mapped_column(ForeignKey("users.telegram_id", ondelete="CASCADE"), index=True)
     
     keyword: Mapped[str] = mapped_column(String, index=True)
     min_price: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     max_price: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     
-    # Используем ARRAY для PostgreSQL. Теперь можно делать правильные фильтры в БД
+    # Массив платформ для нормального поиска
     platforms: Mapped[list[str]] = mapped_column(ARRAY(String), default=lambda: ["mercari", "yahoo"])
     
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    # Связь с таблицей пользователей
     user: Mapped["User"] = relationship(back_populates="tasks")
 
     def __repr__(self) -> str:
         return f"<SearchTask {self.keyword}>"
+
+
+class FoundItem(Base, TimestampMixin):
+    __tablename__ = "found_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.telegram_id", ondelete="CASCADE"), index=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("search_tasks.id", ondelete="CASCADE"))
+    market_id: Mapped[str] = mapped_column(String)
+
+    # Защита на уровне БД: один товар отправляется одному юзеру строго один раз
+    __table_args__ = (
+        UniqueConstraint('user_id', 'market_id', name='uq_user_market_id'),
+    )

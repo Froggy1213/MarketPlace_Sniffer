@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   # --- Database ---
   db:
@@ -44,10 +46,10 @@ services:
     command: uv run python main.py
     restart: always
 
-  # --- Background Worker (Playwright Scraper) ---
-  worker:
+  # --- Microservice 1: Parser (Heavy, Playwright) ---
+  parser_worker:
     build: .
-    container_name: mercari_worker
+    container_name: mercari_parser
     volumes:
       - .:/app:z
       - /app/.venv
@@ -61,10 +63,32 @@ services:
         condition: service_started
       db:
         condition: service_healthy
-    # Start Celery worker with eventlet/gevent or solo pool for async compatibility
-    command: uv run celery -A app.worker.celery_app worker --loglevel=info --concurrency=2
+    # Слушает только дефолтную очередь 'celery'
+    command: uv run celery -A app.worker.celery_app worker -Q celery --loglevel=info --concurrency=2
+    restart: always
 
-  # --- Task Scheduler  ---
+  # --- Microservice 2: Notifier (Lightweight, Telegram API) ---
+  notifier_worker:
+    build: .
+    container_name: mercari_notifier
+    volumes:
+      - .:/app:z
+      - /app/.venv
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_started
+      db:
+        condition: service_healthy
+    # Слушает только очередь 'notifications'
+    command: uv run celery -A app.worker.celery_app worker -Q notifications --loglevel=info --concurrency=4
+    restart: always
+
+  # --- Task Scheduler ---
   beat:
     build: .
     container_name: mercari_beat
@@ -82,6 +106,7 @@ services:
       db:
         condition: service_healthy
     command: uv run celery -A app.worker.celery_app beat --loglevel=info
+    restart: always
 
 volumes:
   postgres_data:
