@@ -3,7 +3,6 @@ from typing import Optional
 
 from sqlalchemy import String, Integer, DateTime, Boolean, BigInteger, ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, declarative_mixin, relationship
-from sqlalchemy.dialects.postgresql import ARRAY
 
 from app.db.database import Base
 
@@ -54,8 +53,8 @@ class SearchTask(Base, TimestampMixin):
     min_price: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     max_price: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     
-    # Массив платформ для нормального поиска
-    platforms: Mapped[list[str]] = mapped_column(ARRAY(String), default=lambda: ["mercari", "yahoo"])
+    # Теперь храним платформы как простую строку через запятую: "mercari,yahoo"
+    platforms: Mapped[str] = mapped_column(String, default="mercari")
     
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 

@@ -1,62 +1,46 @@
-from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup
-from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
-
-AVAILABLE_PLATFORMS = {
-    "mercari": "🛍 Mercari",
-    "yahoo": "🔨 Yahoo Auctions",
-    "rakuma": "🧸 Rakuma",
-    "rakuten": "🛒 Rakuten",
-    "paypay": "📱 PayPay Flea Market"
-}
-
+from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 def get_main_menu() -> ReplyKeyboardMarkup:
-    """Bottom persistent menu (Reply Keyboard)"""
-    builder = ReplyKeyboardBuilder()
-    builder.button(text="➕ New search")
-    builder.button(text="📋 My tasks")
-    builder.button(text="ℹ️ Help")
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="➕ New search"), KeyboardButton(text="📋 My tasks")],
+            [KeyboardButton(text="ℹ️ Help")]
+        ],
+        resize_keyboard=True
+    )
 
-    # 2 buttons in the top row, 1 in the bottom
-    builder.adjust(2, 1)
-    # resize_keyboard=True keeps buttons compact (not half the screen)
-    return builder.as_markup(resize_keyboard=True)
-
-
-def get_platforms_keyboard() -> InlineKeyboardMarkup:
-    """Inline platform selection menu"""
+def get_platforms_keyboard(selected: list[str] = None) -> InlineKeyboardMarkup:
+    if selected is None:
+        selected = []
+        
     builder = InlineKeyboardBuilder()
-    for platform_key, platform_name in AVAILABLE_PLATFORMS.items():
-        builder.button(text=platform_name, callback_data=f"platform_{platform_key}")
-    builder.button(text="✨ All platforms", callback_data=f"platform_{','.join(AVAILABLE_PLATFORMS.keys())}")
-    builder.adjust(2, 2, 1, 1)
+    platforms = ["mercari", "yahoo", "rakuma", "rakuten", "paypay"]
+    
+    for p in platforms:
+        # Ставим галочку, если платформа уже выбрана
+        text = f"✅ {p.capitalize()}" if p in selected else p.capitalize()
+        builder.button(text=text, callback_data=f"platform_{p}")
+        
+    builder.button(text="🌐 All platforms", callback_data="platforms_all")
+    builder.button(text="✅ Done", callback_data="platforms_done")
+    
+    builder.adjust(2, 2, 1, 2)
     return builder.as_markup()
-
 
 def get_price_keyboard(price_type: str) -> InlineKeyboardMarkup:
-    """Price presets for quick input without typing"""
+    """price_type должен быть 'min' или 'max'"""
     builder = InlineKeyboardBuilder()
-
-    if price_type == "min":
-        builder.button(text="0 ¥ (Any price)", callback_data="price_0")
-        builder.button(text="From 1,000 ¥", callback_data="price_1000")
-        builder.button(text="From 5,000 ¥", callback_data="price_5000")
-        builder.button(text="From 10,000 ¥", callback_data="price_10000")
-    else:
-        builder.button(text="♾ No limit", callback_data="price_0")
-        builder.button(text="Up to 5,000 ¥", callback_data="price_5000")
-        builder.button(text="Up to 10,000 ¥", callback_data="price_10000")
-        builder.button(text="Up to 50,000 ¥", callback_data="price_50000")
-
-    builder.adjust(1)  # All buttons stacked vertically for easy thumb tapping
+    prices = [0, 1000, 5000, 10000, 50000] if price_type == "min" else [0, 5000, 10000, 50000, 100000]
+    
+    for price in prices:
+        text = f"¥{price}" if price > 0 else "Skip / Any"
+        builder.button(text=text, callback_data=f"price_{price_type}_{price}")
+        
+    builder.adjust(2)
     return builder.as_markup()
-
-
+    
 def get_delete_task_keyboard(task_id: int) -> InlineKeyboardMarkup:
-    """Inline button for deleting a specific task"""
     builder = InlineKeyboardBuilder()
-    builder.button(
-        text="❌ Delete",
-        callback_data=f"delete_task_{task_id}"
-    )
+    builder.button(text="🗑 Delete", callback_data=f"delete_task_{task_id}")
     return builder.as_markup()

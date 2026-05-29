@@ -14,14 +14,36 @@ async def count_user_tasks(session: AsyncSession, telegram_id: int) -> int:
     )
     return await session.scalar(query) or 0
 
-async def add_search_task(session: AsyncSession, user_id: int, keyword: str, platforms: list[str], min_price: Optional[int] = None, max_price: Optional[int] = None) -> bool:
-    query = select(SearchTask).where(SearchTask.user_id == user_id, SearchTask.keyword == keyword, SearchTask.platforms == platforms)
+
+async def add_search_task(
+        session: AsyncSession,
+        user_id: int,
+        keyword: str,
+        platforms: list[str], 
+        min_price: Optional[int] = None,
+        max_price: Optional[int] = None
+) -> bool:
+    """Adds a new search task to the database for a user."""
+    # Проверяем дубликаты только по юзеру и ключевому слову
+    query = select(SearchTask).where(
+        SearchTask.user_id == user_id,
+        SearchTask.keyword == keyword
+    )
     result = await session.execute(query)
     if result.scalar_one_or_none():
         return False
 
+    # Блок создания задачи с конвертацией списка в строку
     try:
-        new_task = SearchTask(user_id=user_id, keyword=keyword, platforms=platforms, min_price=min_price, max_price=max_price)
+        platforms_str = ",".join(platforms) if isinstance(platforms, list) else platforms
+
+        new_task = SearchTask(
+            user_id=user_id,
+            keyword=keyword,
+            platforms=platforms_str,
+            min_price=min_price,
+            max_price=max_price
+        )
         session.add(new_task)
         await session.commit()
         return True

@@ -4,9 +4,10 @@ from urllib.parse import quote
 from typing import Dict, Set, Tuple, List
 from collections import defaultdict
 
-from app.db.database import worker_engine as engine
+from app.db.database import worker_engine as engine, worker_session_maker
 from app.worker.celery_app import celery_app
 from app.services.tasks import get_all_active_tasks
+from app.services.users import downgrade_expired_pro_users
 from app.services.items import save_new_items, check_and_mark_item_sent
 from app.services.parsers.engine import parse_multiple_urls
 from app.services.parsers.base import ItemData
@@ -128,6 +129,17 @@ async def async_send_notification(
     await send_new_item_notification(item, user_id)
 
 
+# ============================================================================  
+# ЧЕКАЕМ БИЛЛИНГ 
+# ============================================================================
+
+async def async_check_subscriptions():
+    logger.info("🔍 [BILLING] Checking for expired PRO subscriptions...")
+    async with worker_session_maker() as session:
+        count = await downgrade_expired_pro_users(session)
+        if count > 0:
+            logger.info(f"✅ [BILLING] Successfully downgraded {count} users.")
+
 # ============================================================================
 # ВЫЗОВЫ CELERY ТАСОК (С очисткой пула соединений)
 # ============================================================================
@@ -148,6 +160,18 @@ def task_send_notification(**kwargs):
     async def wrapper():
         try:
             await async_send_notification(**kwargs)
+        finally:
+            await engine.dispose()
+            
+    asyncio.run(wrapper())
+
+
+@celery_app.task(name="app.worker.tasks.check_subscriptions")
+def task_check_subscriptions():
+    """Ежедневная проверка истекших PRO-подписок."""
+    async def wrapper():
+        try:
+            await async_check_subscriptions()
         finally:
             await engine.dispose()
             

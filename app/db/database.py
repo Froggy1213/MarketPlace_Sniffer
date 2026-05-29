@@ -1,18 +1,17 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import NullPool, QueuePool
+from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import DeclarativeBase
 from app.core.config import settings
 
-# Движок для бота (с пулингом)
+# Движок для бота (Использует дефолтный асинхронный пул, просто задаем лимиты)
 bot_engine = create_async_engine(
     settings.DATABASE_URL,
-    poolclass=QueuePool,
     pool_size=10,
     max_overflow=20,
     echo=False
 )
 
-# Движок для Celery (без пулинга, так как процессы короткоживущие)
+# Движок для Celery (Выключаем пулинг, чтобы не ловить InterfaceError при форках)
 worker_engine = create_async_engine(
     settings.DATABASE_URL,
     poolclass=NullPool,

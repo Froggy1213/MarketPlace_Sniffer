@@ -34,14 +34,14 @@ celery_app.conf.update(
     }
 )
 
-# Configure Celery Beat (Task Scheduler)
+
 celery_app.conf.beat_schedule = {
-    "run-sniffing-frequently": {
-        # Имя задачи изменилось после рефакторинга
-        "task": "app.worker.tasks.parse_marketplaces",
-        
-        # Снайпер должен работать быстро. Запускаем каждые 3 минуты.
-        # Для PRO-юзеров потом можно будет сделать отдельную таску раз в 30 секунд.
-        "schedule": crontab(minute="*/3"),
+    'parse-marketplaces-every-3-minutes': {
+        'task': 'app.worker.tasks.parse_marketplaces',
+        'schedule': crontab(minute='*/3'),
     },
+    'check-subscriptions-daily': {
+        'task': 'app.worker.tasks.check_subscriptions',
+        'schedule': crontab(hour=0, minute=0),  
+    }
 }
