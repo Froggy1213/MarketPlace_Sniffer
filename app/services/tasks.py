@@ -35,12 +35,11 @@ async def add_search_task(
 
     # Блок создания задачи с конвертацией списка в строку
     try:
-        platforms_str = ",".join(platforms) if isinstance(platforms, list) else platforms
-
+        
         new_task = SearchTask(
             user_id=user_id,
             keyword=keyword,
-            platforms=platforms_str,
+            platforms=platforms,
             min_price=min_price,
             max_price=max_price
         )

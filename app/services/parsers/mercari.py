@@ -1,53 +1,16 @@
+# app/services/parsers/mercari.py
 import re
 import logging
-from typing import List, Optional
-from playwright.async_api import Page, Locator, TimeoutError as PlaywrightTimeoutError
+from typing import Optional
+from playwright.async_api import Locator
 from .base import BaseParser, ItemData, Platform
 
 logger = logging.getLogger(__name__)
 
-
-class MercariSelectors:
-    """Centralized CSS selectors for easy maintenance."""
-    GRID = 'div[id="item-grid"], [data-testid="item-grid"]'
-    ITEM_LINK = 'a[href*="/item/m"]'
-
-
 class MercariParser(BaseParser):
     PLATFORM = Platform.MERCARI
-
-    async def parse_page(self, url: str, page: Page, max_items: int) -> List[ItemData]:
-        import asyncio
-
-        try:
-            await self._goto_with_retry(url, page)
-            await self._scroll_page(page)
-            await asyncio.sleep(1)  # Render delay
-
-            try:
-                await page.wait_for_selector(MercariSelectors.GRID, timeout=8000)
-            except PlaywrightTimeoutError:
-                logger.warning("Mercari: Grid not found, attempting direct link extraction.")
-
-            item_elements = await page.locator(MercariSelectors.ITEM_LINK).all()
-            results: list[ItemData] = []
-
-            for item in item_elements:
-                if len(results) >= max_items:
-                    break  # Strict limit enforcement
-
-                try:
-                    data = await self._extract_item(item)
-                    if data:
-                        results.append(data)
-                except Exception as e:
-                    logger.debug(f"Mercari extraction skipped: {e}")
-                    continue
-
-            return results
-        except Exception as e:
-            logger.error(f"Critical error in MercariParser: {e}", exc_info=True)
-            return []
+    WAIT_SELECTOR = 'div[id="item-grid"], [data-testid="item-grid"]'
+    ITEM_SELECTOR = 'a[href*="/item/m"]'
 
     async def _extract_item(self, item: Locator) -> Optional[ItemData]:
         link = await item.get_attribute("href")

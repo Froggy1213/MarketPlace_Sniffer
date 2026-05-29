@@ -1,8 +1,7 @@
 import logging
 import re
-import asyncio
-from typing import List, Optional
-from playwright.async_api import Page, Locator
+from typing import Optional
+from playwright.async_api import Locator
 from .base import BaseParser, ItemData, Platform
 
 logger = logging.getLogger(__name__)
@@ -10,29 +9,8 @@ logger = logging.getLogger(__name__)
 
 class PayPayParser(BaseParser):
     PLATFORM = Platform.PAYPAY
-
-    async def parse_page(self, url: str, page: Page, max_items: int) -> List[ItemData]:
-        try:
-            await self._goto_with_retry(url, page)
-            await self._scroll_page(page)
-            await asyncio.sleep(1.5)
-
-            # PayPay (Yahoo Flea Market) имеет ссылки вида /item/
-            item_elements = await page.locator('a[href*="/item/"]').all()
-            results: list[ItemData] = []
-            for item in item_elements:
-                if len(results) >= max_items:
-                    break
-                try:
-                    data = await self._extract_item(item)
-                    if data:
-                        results.append(data)
-                except Exception as e:
-                    logger.debug(f"PayPay extraction skipped: {e}")
-            return results
-        except Exception as e:
-            logger.error(f"Error in PayPayParser: {e}")
-            return []
+    WAIT_SELECTOR = 'a[href*="/item/"]'
+    ITEM_SELECTOR = 'a[href*="/item/"]'
 
     async def _extract_item(self, item: Locator) -> Optional[ItemData]:
         url = await item.get_attribute("href")

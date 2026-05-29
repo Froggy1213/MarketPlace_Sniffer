@@ -25,11 +25,10 @@ async def cmd_list(message: Message, state: FSMContext, session: AsyncSession):
     if not tasks:
         await message.answer("📭 Your task list is empty.")
         return
-    
+
     await message.answer("📋 <b>Your Active Searches:</b>", parse_mode="HTML")
     for task in tasks:
-        # Просто заменяем запятые на пробелы для красоты
-        platforms_str = task.platforms.replace(",", ", ").upper()
+        platforms_str = ", ".join(task.platforms).upper()
         price_text = f"¥{task.min_price or 0} - ¥{task.max_price or '∞'}"
         text = (
              f"🎯 <b>{task.keyword}</b>\n"

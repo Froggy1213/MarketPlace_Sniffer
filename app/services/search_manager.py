@@ -35,8 +35,7 @@ async def fetch_and_prepare_notifications() -> List[dict]:
 
     url_to_tasks = defaultdict(list)
     for task in tasks:
-        platforms = task.platforms if isinstance(task.platforms, list) else task.platforms.split(",")
-        for p in platforms:
+        for p in task.platforms:
             url = build_broad_url(p, task.keyword)
             if url:
                 url_to_tasks[url].append(task)

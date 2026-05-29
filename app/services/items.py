@@ -2,23 +2,23 @@ import logging
 from typing import List
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import worker_session_maker as async_session_maker
 from app.db.models import Product, FoundItem
 from app.services.parsers.base import ItemData
 
 logger = logging.getLogger(__name__)
 
-# === ВЫЗЫВАЮТСЯ ТОЛЬКО CELERY (БЕЗ MIDDLEWARE) ===
-async def check_and_mark_item_sent(user_id: int, task_id: int, market_id: str) -> bool:
-    async with async_session_maker() as session:
-        try:
-            found_item = FoundItem(user_id=user_id, task_id=task_id, market_id=market_id)
-            session.add(found_item)
-            await session.commit()
-            return True
-        except IntegrityError:
-            await session.rollback()
-            return False
+# === Принимаем session извне ===
+async def check_and_mark_item_sent(session: AsyncSession, user_id: int, task_id: int, market_id: str) -> bool:
+    try:
+        found_item = FoundItem(user_id=user_id, task_id=task_id, market_id=market_id)
+        session.add(found_item)
+        await session.commit()
+        return True
+    except IntegrityError:
+        await session.rollback()
+        return False
 
 async def save_new_items(items: List[ItemData]) -> List[ItemData]:
     if not items:
@@ -45,9 +45,9 @@ async def save_new_items(items: List[ItemData]) -> List[ItemData]:
                 session.add_all(new_products_to_insert)
                 await session.commit()
                 logger.info(f"💾 New products saved to DB: {len(new_products_to_insert)}")
-            # Правильный вариант:
             except Exception as e:
                 logger.error(f"🗄 Ошибка БД при массовом сохранении {len(new_products_to_insert)} товаров. Детали: {e}")
                 await session.rollback()
+                raise  
 
         return new_items_data
