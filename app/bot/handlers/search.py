@@ -1,3 +1,4 @@
+import re
 from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
@@ -18,25 +19,25 @@ async def cmd_list(message: Message, state: FSMContext, session: AsyncSession):
     if not message.text or not message.from_user:
         return
 
-    # Сбрасываем стейт, если юзер передумал и нажал меню посреди создания задачи
     await state.clear() 
 
     tasks = await get_user_tasks(session, message.from_user.id)
     if not tasks:
         await message.answer("📭 Your task list is empty.")
         return
-
+    
     await message.answer("📋 <b>Your Active Searches:</b>", parse_mode="HTML")
     for task in tasks:
-        platforms_str = ", ".join(task.platforms).upper()
+        # Теперь из БД будет приходить нормальная строка, просто наводим красоту
+        platforms_str = str(task.platforms).replace(",", ", ").upper()
+        
         price_text = f"¥{task.min_price or 0} - ¥{task.max_price or '∞'}"
         text = (
-             f"🎯 <b>{task.keyword}</b>\n"
+            f"🎯 <b>{task.keyword}</b>\n"
             f"🛒 {platforms_str}\n"
             f"💰 {price_text}"
         )
         await message.answer(text, parse_mode="HTML", reply_markup=get_delete_task_keyboard(task.id))
-
 
 @search_router.callback_query(F.data.startswith("delete_task_"))
 async def process_delete_task(callback: CallbackQuery, session: AsyncSession):
