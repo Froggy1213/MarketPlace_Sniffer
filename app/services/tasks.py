@@ -48,7 +48,7 @@ async def add_search_task(
         await session.commit()
         return True
     except Exception as e:
-        logger.error(f"Error adding task: {e}")
+        logger.error(f"🗄 Ошибка БД при добавлении задачи (user_id={user_id}, keyword='{keyword}'). Детали: {e}")
         await session.rollback()
         return False
 
@@ -64,7 +64,7 @@ async def delete_search_task(session: AsyncSession, task_id: int, user_id: int) 
         await session.commit()
         return result.rowcount > 0 
     except Exception as e:
-        logger.error(f"Error deleting task: {e}")
+        logger.error(f"🗄 Ошибка БД при удалении задачи (user_id={user_id}, task_id={task_id}). Детали: {e}")
         await session.rollback()
         return False
 

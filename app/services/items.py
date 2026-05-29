@@ -45,8 +45,9 @@ async def save_new_items(items: List[ItemData]) -> List[ItemData]:
                 session.add_all(new_products_to_insert)
                 await session.commit()
                 logger.info(f"💾 New products saved to DB: {len(new_products_to_insert)}")
+            # Правильный вариант:
             except Exception as e:
-                logger.error(f"Error saving products: {e}")
+                logger.error(f"🗄 Ошибка БД при массовом сохранении {len(new_products_to_insert)} товаров. Детали: {e}")
                 await session.rollback()
 
         return new_items_data
