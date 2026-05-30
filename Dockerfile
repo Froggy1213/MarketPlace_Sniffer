@@ -19,4 +19,19 @@ RUN uv run playwright install chromium
 
 COPY . .
 
+# 1. Создаем системного пользователя 'appuser' без админских прав
+RUN useradd -m -d /app -s /bin/bash appuser
+
+# 2. Указываем Playwright скачивать браузеры в папку нашего пользователя
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
+
+# 3. Передаем права на все файлы проекта новому пользователю
+RUN chown -R appuser:appuser /app
+
+# 4. Переключаемся на безопасного пользователя
+USER appuser
+
+# 5. Устанавливаем Chromium от имени appuser
+RUN uv run playwright install chromium
+
 CMD ["uv", "run", "python", "main.py"]

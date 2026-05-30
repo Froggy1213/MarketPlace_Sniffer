@@ -1,21 +1,36 @@
-# Виртуальное окружение
+# === Секреты и конфиги (САМОЕ ВАЖНОЕ) ===
+.env
+*.env
+!.env.example
+
+# === Виртуальное окружение ===
+.venv/
 venv/
 env/
-.env
 
-# Байт-код Python
+# === Байт-код Python ===
 __pycache__/
 *.py[cod]
+*$py.class
 
-# База данных (мы не хотим грузить саму БД в интернет)
+# === База данных ===
 postgres_data/
 
-# Файлы IDE (если пользуешься VS Code или PyCharm)
+# === Celery ===
+celerybeat-schedule*
+celerybeat.pid
+*.pid
+
+# === Playwright и кэш ===
+.cache/
+.pytest_cache/
+
+# === Файлы IDE ===
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# Секреты (САМОЕ ВАЖНОЕ)
-.env
-
-# Celery
-celerybeat-schedule
+# === Системные файлы (Mac/Windows) ===
+.DS_Store
+Thumbs.db
