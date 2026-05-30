@@ -14,7 +14,7 @@ docker exec sniffer_db pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" | gzip > "$
 
 # Отправляем архив в Telegram (используем токен бота и твой ADMIN_ID)
 curl -s -F document=@"$BACKUP_FILE" \
-  "https://api.telegram.org/bot8324969833:AAHW1LNANc_aURNWV8QNL0UlkD2GyzDBRp0/sendDocument?chat_id=336185466&caption=📦 Бэкап БД Sniffer" > /dev/null
+  "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${ADMIN_ID}&caption=📦 Бэкап БД Sniffer" > /dev/null
 
 # Удаляем локальный архив, чтобы не забивать диск сервера
 rm "$BACKUP_FILE"
