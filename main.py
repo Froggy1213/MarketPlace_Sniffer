@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from app.core.sentry import setup_sentry
 from aiogram import Bot, Dispatcher
 from app.core.config import settings
 from app.bot.handlers import main_router
@@ -12,6 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 async def main():
+    setup_sentry()
     logger.info("🤖 Starting Telegram Bot...")
 
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN.get_secret_value())
