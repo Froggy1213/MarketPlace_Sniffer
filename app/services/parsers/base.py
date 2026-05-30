@@ -34,7 +34,6 @@ class Platform(Enum):
     MERCARI = "mercari"
     YAHOO = "yahoo"
     RAKUMA = "rakuma"
-    RAKUTEN = "rakuten"
     PAYPAY = "paypay"
     UNKNOWN = "unknown"
 

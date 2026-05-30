@@ -19,8 +19,6 @@ def build_broad_url(platform: str, keyword: str) -> str:
         return f"https://auctions.yahoo.co.jp/search/search?p={safe_keyword}"
     elif platform == "rakuma":
         return f"https://fril.jp/search/{safe_keyword}"
-    elif platform == "rakuten":
-        return f"https://search.rakuten.co.jp/search/mall/{safe_keyword}/"
     elif platform == "paypay":
         return f"https://paypayfleamarket.yahoo.co.jp/search/{safe_keyword}"
     return ""
@@ -68,7 +66,6 @@ async def fetch_and_prepare_notifications() -> List[dict]:
 
     unique_items = {item.market_id: item for item in all_valid_items}.values()
     
-    # Формируем список для очереди вместо прямой отправки
     notifications_to_send = []
     for item in unique_items:
         target_users = item_to_users.get(item.market_id, set())

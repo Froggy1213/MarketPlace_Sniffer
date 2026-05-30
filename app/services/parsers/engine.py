@@ -4,19 +4,15 @@ import logging
 import random
 from typing import List, Dict, Type
 
-# Добавили импорт TimeoutError специально из playwright
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 
 from .base import BaseParser, Platform, ItemData
 from .rakuma import RakumaParser
-from .rakuten import RakutenParser
 from .paypay import PayPayParser
 from .mercari import MercariParser
 from .yahoo import YahooParser
 
-# Logger instance for this module
 logger = logging.getLogger(__name__)
-
 
 # ============================================================================
 # PARSER FACTORY
@@ -27,7 +23,6 @@ class ParserFactory:
         Platform.MERCARI: MercariParser,
         Platform.YAHOO: YahooParser,
         Platform.RAKUMA: RakumaParser,
-        Platform.RAKUTEN: RakutenParser,
         Platform.PAYPAY: PayPayParser,
     }
 
@@ -41,8 +36,6 @@ class ParserFactory:
             return cls._PARSERS[Platform.YAHOO]()
         elif "fril.jp" in url:
             return cls._PARSERS[Platform.RAKUMA]()
-        elif "rakuten.co.jp" in url:
-            return cls._PARSERS[Platform.RAKUTEN]()
         raise ValueError(f"No parser plugin found for URL: {url}")
 
 

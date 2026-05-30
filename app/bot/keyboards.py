@@ -15,17 +15,17 @@ def get_platforms_keyboard(selected: list[str] = None) -> InlineKeyboardMarkup:
         selected = []
         
     builder = InlineKeyboardBuilder()
-    platforms = ["mercari", "yahoo", "rakuma", "rakuten", "paypay"]
+    platforms = ["mercari", "yahoo", "rakuma", "paypay"]
     
     for p in platforms:
-        # Ставим галочку, если платформа уже выбрана
         text = f"✅ {p.capitalize()}" if p in selected else p.capitalize()
         builder.button(text=text, callback_data=f"platform_{p}")
         
     builder.button(text="🌐 All platforms", callback_data="platforms_all")
     builder.button(text="✅ Done", callback_data="platforms_done")
     
-    builder.adjust(2, 2, 1, 2)
+    # Сетка: 2 кнопки, 2 кнопки, 1 кнопка (All), 1 кнопка (Done)
+    builder.adjust(2, 2, 1, 1)
     return builder.as_markup()
 
 def get_price_keyboard(price_type: str) -> InlineKeyboardMarkup:

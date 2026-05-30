@@ -9,31 +9,32 @@ error_router = Router()
 @error_router.errors()
 async def global_error_handler(event: ErrorEvent):
     """
-    Глобальный перехватчик всех необработанных исключений в хендлерах бота.
+    Global handler for all unhandled exceptions in bot handlers.
+    Logs the error and sends a user-friendly notification.
     """
-    # 1. Логируем саму ошибку с полным трейсбеком для отладки
-    logger.critical(f"🔥 Критическая ошибка: {event.exception}", exc_info=True)
+    # 1. Log the error with full traceback for debugging
+    logger.critical(f"🔥 Critical error: {event.exception}", exc_info=True)
     
     update = event.update
     
-    # 2. Пытаемся извиниться перед пользователем
+    # 2. Try to apologize to the user
     try:
         error_msg = (
-            "⚠️ <b>Упс! Произошла внутренняя ошибка.</b>\n"
-            "Что-то пошло не так. Разработчики уже получили уведомление и всё починят."
+            "⚠️ <b>Oops! An internal error occurred.</b>\n"
+            "Something went wrong. The developers have been notified and will fix it."
         )
         
         if update.message:
             await update.message.answer(error_msg, parse_mode="HTML")
         elif update.callback_query:
-            # Если юзер нажал кнопку, отвечаем на сообщение с кнопкой и гасим "часики" загрузки
+            # If user clicked a button, answer the message and cancel the loading spinner
             await update.callback_query.message.answer(error_msg, parse_mode="HTML")
-            await update.callback_query.answer("Произошла ошибка ⚙️", show_alert=True)
+            await update.callback_query.answer("An error occurred ⚙️", show_alert=True)
             
     except Exception as e:
-        # Если бот даже извиниться не смог (например, юзер нас заблокировал)
-        logger.error(f"Не удалось отправить уведомление об ошибке юзеру: {e}")
+        # If the bot couldn't even apologize (for example, the user blocked us)
+        logger.error(f"Failed to send error notification to user: {e}")
     
-    # 3. Обязательно возвращаем True. 
-    # Это сигнал для Aiogram: "Ошибка обработана, не нужно крашить приложение".
+    # 3. Always return True.
+    # This signals to Aiogram: "Error is handled, no need to crash the application".
     return True

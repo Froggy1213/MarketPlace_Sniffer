@@ -99,7 +99,7 @@ async def process_platforms(callback: CallbackQuery, state: FSMContext):
         
     elif callback.data == "platforms_all":
         # Логика для кнопки "All platforms"
-        all_platforms = ["mercari", "yahoo", "rakuma", "rakuten", "paypay"]
+        all_platforms = ["mercari", "yahoo", "rakuma", "paypay"]
         await state.update_data(platforms=all_platforms)
         await callback.message.edit_reply_markup(reply_markup=get_platforms_keyboard(all_platforms))
         
