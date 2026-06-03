@@ -9,7 +9,7 @@
 
 > **Real-time marketplace intelligence for Japan's top platforms — delivered straight to Telegram.**
 
-MarketPlace Sniffer is a production-grade, multi-tenant SaaS bot that continuously monitors **Mercari, Yahoo Auctions, Rakuma, Rakuten,** and **PayPay Flea Market** for new listings matching your criteria. The moment a match appears — you get notified. Before anyone else.
+MarketPlace Sniffer is a production-grade, multi-tenant SaaS bot that continuously monitors **Mercari, Yahoo Auctions, Rakuma,** and **PayPay Flea Market** for new listings matching your criteria. The moment a match appears — you get notified.
 
 ---
 
@@ -17,9 +17,9 @@ MarketPlace Sniffer is a production-grade, multi-tenant SaaS bot that continuous
 
 Japan's resale market moves fast. Rare items sell in minutes. MarketPlace Sniffer gives you an unfair advantage:
 
-- 🎯 **Keyword + price range targeting** across 5 platforms simultaneously
-- ⚡ **Sub-minute detection latency** via distributed Celery workers
-- 🧠 **Zero duplicate noise** — PostgreSQL deduplication ensures every notification is unique
+- 🎯 **Keyword + price range targeting** across 4 platforms simultaneously
+- ⚡ **Scheduled scans every 3 minutes** via Celery Beat and distributed workers
+- 🧠 **Zero duplicate noise** — PostgreSQL deduplication ensures every notification is unique per user
 - 📸 **Rich notifications** — photo, title, price, and a direct buy link in one message
 - 🤖 **Fully automated** — set it and forget it
 
@@ -35,8 +35,9 @@ Plugin architecture (Open/Closed Principle) makes adding new platforms trivial. 
 | Mercari Japan | C2C | ✅ Live |
 | Yahoo Auctions | C2C Auction | ✅ Live |
 | Rakuma | C2C | ✅ Live |
-| Rakuten | B2C | ✅ Live |
 | PayPay Flea Market | C2C | ✅ Live |
+
+Mercari searches use `status=on_sale` in the search URL, so the marketplace API returns only active listings — no extra sold-item filter in application code.
 
 ### 👥 Multi-Tenant Architecture
 Every user manages their own independent search tasks. The scraping engine intelligently **batches identical queries** from different users into a single browser session — slashing CPU and RAM overhead at scale.
@@ -59,36 +60,40 @@ No commands to memorize. A guided **FSM (Finite State Machine)** flow walks user
 
 ## 🏗️ Architecture
 ```
-┌─────────────────────────────────────────────────────┐
-│                   Docker Network                    │
-│                                                     │
-│  ┌──────────┐    ┌──────────┐    ┌───────────────┐  │
-│  │   bot    │    │ worker   │    │     beat      │  │
-│  │ Aiogram  │    │Playwright│    │ Celery CRON   │  │
-│  │ FSM/UX   │    │ Scraper  │    │  Scheduler    │  │
-│  └────┬─────┘    └────┬─────┘    └───────┬───────┘  │
-│       │               │                  │          │
-│  ┌────▼───────────────▼──────────────────▼───────┐  │
-│  │                   Redis                       │  │
-│  │            Message Broker / Queue             │  │
-│  └────────────────────┬──────────────────────────┘  │
-│                       │                             │
-│               ┌───────▼────────┐                    │
-│               │   PostgreSQL   │                    │
-│               │  Async + ORM   │                    │
-│               └────────────────┘                    │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      Docker Network                          │
+│                                                              │
+│  ┌──────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────┐  │
+│  │   bot    │  │parser_worker │  │notifier_worker│  │ beat │  │
+│  │ Aiogram  │  │  Playwright  │  │  Telegram API │  │ CRON │  │
+│  │ FSM/UX   │  │   (celery)   │  │(notifications)│  │      │  │
+│  └────┬─────┘  └──────┬───────┘  └───────┬───────┘  └──┬───┘  │
+│       │               │                  │             │       │
+│       └───────────────┴──────────────────┴─────────────┘       │
+│                               │                                │
+│                    ┌──────────▼──────────┐                     │
+│                    │        Redis        │                     │
+│                    │  Broker / Queues    │                     │
+│                    │ celery | notifications                     │
+│                    └──────────┬──────────┘                     │
+│                               │                                │
+│                    ┌──────────▼──────────┐                     │
+│                    │     PostgreSQL      │                     │
+│                    │    Async + ORM      │                     │
+│                    └─────────────────────┘                     │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-**5 isolated containers, zero single points of failure:**
+**Compose services** (see `docker-compose.yml`):
 
-| Container | Role |
-| :--- | :--- |
-| `bot` | Aiogram 3.x — FSM, keyboards, user interactions |
-| `worker` | Async Playwright — scraping execution |
-| `beat` | Celery Beat — CRON-based task scheduling |
-| `redis` | Message broker + task queue |
-| `db` | PostgreSQL 15 — persistent storage |
+| Service | Container name | Role |
+| :--- | :--- | :--- |
+| `bot` | `sniffer_bot` | Aiogram 3.x — FSM, keyboards, user interactions |
+| `parser_worker` | `sniffer_parser` | Celery worker (`celery` queue) — Playwright scraping |
+| `notifier_worker` | `sniffer_notifier` | Celery worker (`notifications` queue) — Telegram delivery |
+| `beat` | `sniffer_beat` | Celery Beat — schedules parse cycle every 3 minutes |
+| `redis` | `sniffer_redis` | Message broker and result backend |
+| `db` | `sniffer_db` | PostgreSQL 15 — persistent storage |
 
 ---
 
@@ -118,13 +123,20 @@ cd MarketPlace_Sniffer
 ```bash
 cp .env.example .env
 ```
-Fill in your credentials:
+
+Fill in `.env` (see `.env.example`). Required variables:
+
 ```env
 TELEGRAM_BOT_TOKEN=your_token_here
 ADMIN_ID=your_telegram_id
-POSTGRES_URL=postgresql+asyncpg://...
-REDIS_URL=redis://redis:6379/0
+
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your_secure_password
+POSTGRES_DB=mercari_db
+POSTGRES_PORT=5432
 ```
+
+When running via Docker Compose, `POSTGRES_HOST=db` and `REDIS_URL=redis://redis:6379/0` are injected automatically — you do not need to set them in `.env`. Optional: `SENTRY_DSN` for error monitoring.
 
 **3. Launch the full cluster**
 ```bash
@@ -133,7 +145,7 @@ docker compose up -d --build
 
 **4. Apply database migrations**
 ```bash
-docker exec -it mercari_bot uv run alembic upgrade head
+docker exec -it sniffer_bot uv run alembic upgrade head
 ```
 
 That's it. The bot is live.
@@ -148,8 +160,10 @@ Send `/start` — the bot handles the rest.
 | :--- | :--- |
 | Create a search task | `➕ New search` → pick platform → enter keyword → set price range |
 | View active tasks | `📋 My tasks` → see all tasks with inline delete buttons |
-| Delete a task | Press `❌ Delete` on any task card |
+| Delete a task | Press `🗑 Delete` on any task card |
 | Get help | `ℹ️ Help` |
+
+Optional commands: `/add`, `/list`, `/admin` (admin only).
 
 ---
 
